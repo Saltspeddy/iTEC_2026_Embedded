@@ -51,6 +51,7 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 char msg[] = "Hello from STM32\r\n";
+char matrix[2][3] = {{'1', '1', '0'},{'0', '0', '1'}};
 uint8_t rxData;
 /* USER CODE END PV */
 
@@ -114,8 +115,20 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg)-1, HAL_MAX_DELAY);
+    // HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg)-1, HAL_MAX_DELAY);
+    HAL_Delay(500);
+    for (int i = 0; i < 2; i++) {
+      char currMsg[4];
+      for (int j = 0; j < 3; j++)
+        currMsg[j] = matrix[i][j];
+      currMsg[3] = '\0';
+
+      char endl[] = "\r\n";
+      HAL_UART_Transmit(&huart2, (uint8_t*)currMsg, 4, HAL_MAX_DELAY);
+      HAL_UART_Transmit(&huart2, (uint8_t*)endl, 2, HAL_MAX_DELAY);
+    }
     HAL_Delay(1000);
+    break;
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
 
