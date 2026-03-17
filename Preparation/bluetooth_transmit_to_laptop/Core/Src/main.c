@@ -50,6 +50,7 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+char msg[] = "Hello from STM32\r\n";
 uint8_t rxData;
 /* USER CODE END PV */
 
@@ -113,6 +114,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg)-1, HAL_MAX_DELAY);
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
 
