@@ -134,8 +134,8 @@ void HCSR04_Trigger(ultrasonicDir currDir)
   delay_us(10);
 
   HAL_GPIO_WritePin(Ultrasound_TRIG_GPIO_Port , Ultrasound_TRIG_Pin, GPIO_PIN_SET);
-  // HAL_Delay(1);
   delay_us(10);
+  
   HAL_GPIO_WritePin(Ultrasound_TRIG_GPIO_Port, Ultrasound_TRIG_Pin, GPIO_PIN_RESET);
 }
 
@@ -230,17 +230,18 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   ultrasonicDir currDir;
-  float d0, d1, d2;
   while (1)
   {
     // reality - CANNOT trigger all 3 sensors simultaneously: otherwise, we get interference
     // need 50 ms (at least 30 ms) between each sensor
     uint16_t ledPins[3] = {GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14};
     for (int i = 0; i < 3; i++) {
-      d0 = sensors[0].Distance;
-      d1 = sensors[1].Distance;
-      d2 = sensors[2].Distance;
       currDir = i;
+
+      // reset the current sensor's values if they were left in the air previously
+      sensors[i].Is_First_Captured = 0;
+      sensors[i].Distance = 999;
+
       HCSR04_Trigger(currDir);
       HAL_Delay(50);
 
@@ -256,35 +257,6 @@ int main(void)
         HAL_GPIO_WritePin(GPIOD, ledPins[i], GPIO_PIN_RESET);
       }
     }
-   //  currDir = CENTER;
-   //  HCSR04_Trigger(currDir);
-   //  if(sensors[CENTER].Distance <= 5){
-	  //  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
-	  // }
-   //  else{
-   //     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
-   //  }
-   //  HAL_Delay(50);
-   //
-   //  currDir = LEFT;
-   //  HCSR04_Trigger(currDir);
-   //  if(sensors[LEFT].Distance <= 5){
-   //    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
-   //  }
-   //  else{
-   //    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
-   //  }
-   //  HAL_Delay(50);
-   //
-   //  currDir = RIGHT;
-   //  HCSR04_Trigger(currDir);
-   //  if(sensors[RIGHT].Distance <= 5){
-   //    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
-   //  }
-   //  else{
-   //    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
-   //  }
-   //  HAL_Delay(50);
 
     /* USER CODE END WHILE */
     MX_USB_HOST_Process();
