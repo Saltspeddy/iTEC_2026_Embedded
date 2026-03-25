@@ -19,6 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_host.h"
+#include "../Inc/pwm_motors.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,7 +33,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PWM_MAX 499
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,9 +50,6 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
-
-uint16_t leftMotorSpeed = 0;
-uint16_t rightMotorSpeed = 0;
 
 /* USER CODE END PV */
 
@@ -72,65 +69,6 @@ void MX_USB_HOST_Process(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-enum motor { LEFT_MOTOR = 3, RIGHT_MOTOR = 4, BOTH_MOTORS = 5};
-enum motor_direction {LEFT_DIR = 6, FORWARD_DIR = 7, RIGHT_DIR = 8};
-
-void changeDirection( enum motor_direction dir) {
-    uint16_t maxSpeed = (leftMotorSpeed > rightMotorSpeed) ? leftMotorSpeed : rightMotorSpeed;  //DEACCELERATE MOTORS BEFORE CHANGING DIRECTION
-    for (int i = maxSpeed; i >= 0; i--) {
-      if (i <= leftMotorSpeed)  TIM3->CCR3 = i;
-      if (i <= rightMotorSpeed) TIM3->CCR4 = i;
-      HAL_Delay(10);
-    }
-    leftMotorSpeed = 0;
-    rightMotorSpeed = 0;
-    HAL_Delay(50);
-
-    switch (dir) {
-        case FORWARD_DIR:
-            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, 1);
-            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, 0);
-
-            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, 0);
-            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, 1);
-            break;
-        case RIGHT_DIR:
-            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, 1);
-            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, 0);
-
-            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, 1);
-            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, 0);
-            break;
-        case LEFT_DIR:
-            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, 0);
-            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, 1);
-
-            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, 0);
-            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, 1);
-            break;
-    }
-}
-
-void setSpeed(enum motor motor, uint16_t speed) {
-    if (speed > PWM_MAX) speed = PWM_MAX;
-
-    switch (motor) {
-        case LEFT_MOTOR:
-            leftMotorSpeed = speed;
-            TIM3->CCR3 = speed;
-            break;
-        case RIGHT_MOTOR:
-            rightMotorSpeed = speed;
-            TIM3->CCR4 = speed;
-            break;
-        case BOTH_MOTORS:
-            leftMotorSpeed = speed;
-            rightMotorSpeed = speed;
-            TIM3->CCR3 = speed;
-            TIM3->CCR4 = speed;
-            break;
-    }
-}
 /* USER CODE END 0 */
 
 /**
@@ -168,8 +106,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USB_HOST_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+  Motor_Init(&htim3);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -180,22 +117,22 @@ int main(void)
     MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
-    changeDirection(FORWARD_DIR);
+    Motor_ChangeDirection(FORWARD_DIR);
     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, 0);
     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, 1);
     for (int i = 0; i <= PWM_MAX; i++) {
-      setSpeed(LEFT_MOTOR,i);
-      setSpeed(RIGHT_MOTOR,i);
+      Motor_SetSpeed(LEFT_MOTOR,i);
+      Motor_SetSpeed(RIGHT_MOTOR,i);
 
       HAL_Delay(10);
     }
 
-    changeDirection(LEFT_DIR);
+    Motor_ChangeDirection(LEFT_DIR);
     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, 1);
     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, 0);
     for (int i = 0; i <= PWM_MAX; i++) {
-      setSpeed(LEFT_MOTOR,i);
-      setSpeed(RIGHT_MOTOR,i);
+      Motor_SetSpeed(LEFT_MOTOR,i);
+      Motor_SetSpeed(RIGHT_MOTOR,i);
       HAL_Delay(10);
     }
 
