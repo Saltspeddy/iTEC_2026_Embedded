@@ -1,6 +1,7 @@
 #ifndef ULTRASONIC_3_SENSORS_BLUETOOTH_CONTROL_ULTRASONIC_SENSORS_H
 #define ULTRASONIC_3_SENSORS_BLUETOOTH_CONTROL_ULTRASONIC_SENSORS_H
 #include <stdint.h>
+#include "stm32f4xx_hal.h"
 
 typedef enum ultrasonic_sensor_direction {
   CENTER = 0,
