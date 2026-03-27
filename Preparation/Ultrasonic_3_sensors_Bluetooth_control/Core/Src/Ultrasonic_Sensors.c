@@ -1,10 +1,11 @@
-#include "Ultrasonic_Sensors.h"
+#include "../Inc/Ultrasonic_Sensors.h"
+#include "main.h"
 
 // private to this source file / library, only accessible through the getter/setter
 // HCSR04_GetDistance, HCSR04_Reset
 static HCSR04_t sensors[3];
 
-inline HCSR04_t* getSensorByChannel(uint32_t channel)
+HCSR04_t* getSensorByChannel(uint32_t channel)
 {
     switch(channel)
     {
@@ -15,14 +16,23 @@ inline HCSR04_t* getSensorByChannel(uint32_t channel)
     }
 }
 
-inline void DWT_Init(void)
+void DWT_Init(void)
 {
   CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
   DWT->CYCCNT = 0;
   DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-inline void HCSR04_Trigger(ultrasonicDir currDir)
+void delay_us(uint32_t us)
+{
+  uint32_t cycles = (SystemCoreClock / 1000000) * us;
+  uint32_t start = DWT->CYCCNT;
+
+  while ((DWT->CYCCNT - start) < cycles)
+    ;
+}
+
+void HCSR04_Trigger(ultrasonicDir_t currDir)
 {
   // select the ultrasonic sensor to trigger
   GPIO_TypeDef* Ultrasound_TRIG_GPIO_Port;
@@ -53,7 +63,7 @@ inline void HCSR04_Trigger(ultrasonicDir currDir)
   HAL_GPIO_WritePin(Ultrasound_TRIG_GPIO_Port, Ultrasound_TRIG_Pin, GPIO_PIN_RESET);
 }
 
-inline void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+void HCSR04_ProcessEcho(TIM_HandleTypeDef *htim)
 {
   HCSR04_t* sensor = getSensorByChannel(htim->Channel);
   if (sensor == NULL)
@@ -98,4 +108,19 @@ inline void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 
     __HAL_TIM_SET_CAPTUREPOLARITY(htim, channel, TIM_INPUTCHANNELPOLARITY_RISING);
   }
+}
+
+float HCSR04_GetDistance(ultrasonicDir_t dir)
+{
+  if (dir >= 3 || dir < 0)
+    return 999;
+  return sensors[dir].Distance;
+}
+
+void HCSR04_Reset(ultrasonicDir_t dir)
+{
+  if (dir >= 3 || dir < 0)
+    return;
+  sensors[dir].Is_First_Captured = 0;
+  sensors[dir].Distance = 999;
 }

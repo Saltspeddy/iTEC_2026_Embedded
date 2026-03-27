@@ -7,7 +7,7 @@ typedef enum ultrasonic_sensor_direction {
   CENTER = 0,
   LEFT = 1,
   RIGHT = 2
-}ultrasonicDir;
+} ultrasonicDir_t;
 
 typedef struct {
   uint32_t IC_Val1;
@@ -17,8 +17,13 @@ typedef struct {
   float Distance; // (cm)
 } HCSR04_t;
 
-inline HCSR04_t* getSensorByChannel(uint32_t channel);
-inline void DWT_Init(void);
-inline void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim);
+// extern HCSR04_t sensors[3];
+
+HCSR04_t* getSensorByChannel(uint32_t channel);
+void DWT_Init(void);
+void HCSR04_ProcessEcho(TIM_HandleTypeDef *htim);
+void HCSR04_Trigger(ultrasonicDir_t currDir);
+float HCSR04_GetDistance(ultrasonicDir_t dir);
+void HCSR04_Reset(ultrasonicDir_t dir);
 
 #endif //ULTRASONIC_3_SENSORS_BLUETOOTH_CONTROL_ULTRASONIC_SENSORS_H

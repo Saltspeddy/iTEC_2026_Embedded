@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "Ultrasonic_Sensors.h"
+#include "../Inc/Ultrasonic_Sensors.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,7 +59,7 @@ uint8_t stopSignal;
 //   CENTER = 0,
 //   LEFT = 1,
 //   RIGHT = 2
-// }ultrasonicDir;
+// }ultrasonicDir_t;
 //
 // typedef struct {
 //   uint32_t IC_Val1;
@@ -88,110 +88,10 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void DWT_Init(void)
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-  DWT->CYCCNT = 0;
-  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+  HCSR04_ProcessEcho(htim);
 }
-
-void delay_us(uint32_t us)
-{
-  uint32_t cycles = (SystemCoreClock / 1000000) * us;
-  uint32_t start = DWT->CYCCNT;
-
-  while ((DWT->CYCCNT - start) < cycles)
-    ;
-}
-
-  // HCSR04_t* getSensorByChannel(uint32_t channel)
-  // {
-  //   switch(channel)
-  //   {
-  //     case HAL_TIM_ACTIVE_CHANNEL_2: return &sensors[CENTER];
-  //     case HAL_TIM_ACTIVE_CHANNEL_3: return &sensors[LEFT];
-  //     case HAL_TIM_ACTIVE_CHANNEL_4: return &sensors[RIGHT];
-  //     default: return NULL;
-  //   }
-  // }
-  //
-  // void HCSR04_Trigger(ultrasonicDir currDir)
-  // {
-  //   // select the ultrasonic sensor to trigger
-  //   GPIO_TypeDef* Ultrasound_TRIG_GPIO_Port;
-  //   uint16_t Ultrasound_TRIG_Pin;
-  //   switch (currDir) {
-  //     case CENTER:
-  //       Ultrasound_TRIG_GPIO_Port = UltraS_Center_Trig_GPIO_Port;
-  //       Ultrasound_TRIG_Pin = UltraS_Center_Trig_Pin;
-  //       break;
-  //     case LEFT:
-  //       Ultrasound_TRIG_GPIO_Port = UltraS_Left_Trig_GPIO_Port;
-  //       Ultrasound_TRIG_Pin = UltraS_Left_Trig_Pin;
-  //       break;
-  //     case RIGHT:
-  //       Ultrasound_TRIG_GPIO_Port = UltraS_Right_Trig_GPIO_Port;
-  //       Ultrasound_TRIG_Pin = UltraS_Right_Trig_Pin;
-  //       break;
-  //     default:
-  //       return;
-  //   }
-  //
-  //   HAL_GPIO_WritePin(Ultrasound_TRIG_GPIO_Port, Ultrasound_TRIG_Pin, GPIO_PIN_RESET);
-  //   delay_us(10);
-  //
-  //   HAL_GPIO_WritePin(Ultrasound_TRIG_GPIO_Port , Ultrasound_TRIG_Pin, GPIO_PIN_SET);
-  //   delay_us(10);
-  //
-  //   HAL_GPIO_WritePin(Ultrasound_TRIG_GPIO_Port, Ultrasound_TRIG_Pin, GPIO_PIN_RESET);
-  // }
-  //
-  // void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-  // {
-  //   HCSR04_t* sensor = getSensorByChannel(htim->Channel);
-  //   if (sensor == NULL)
-  //     return;
-  //
-  //   uint32_t channel;
-  //
-  //   switch(htim->Channel)
-  //   {
-  //     case HAL_TIM_ACTIVE_CHANNEL_2:
-  //       channel = TIM_CHANNEL_2;
-  //       break;
-  //     case HAL_TIM_ACTIVE_CHANNEL_3:
-  //       channel = TIM_CHANNEL_3;
-  //       break;
-  //     case HAL_TIM_ACTIVE_CHANNEL_4:
-  //       channel = TIM_CHANNEL_4;
-  //       break;
-  //     default:
-  //       return;
-  //   }
-  //
-  //   if (sensor->Is_First_Captured == 0)
-  //   {
-  //     sensor->IC_Val1 = HAL_TIM_ReadCapturedValue(htim, channel);
-  //     sensor->Is_First_Captured = 1;
-  //
-  //     __HAL_TIM_SET_CAPTUREPOLARITY(htim, channel, TIM_INPUTCHANNELPOLARITY_FALLING);
-  //   }
-  //   else if (sensor->Is_First_Captured == 1)
-  //   {
-  //     sensor->IC_Val2 = HAL_TIM_ReadCapturedValue(htim, channel);
-  //
-  //     if (sensor->IC_Val2 > sensor->IC_Val1)
-  //       sensor->Difference = sensor->IC_Val2 - sensor->IC_Val1;
-  //     else
-  //       sensor->Difference = (0xffffffff - sensor->IC_Val1) + sensor->IC_Val2;
-  //
-  //     sensor->Distance = sensor->Difference * 0.034 / 2.0;
-  //
-  //     sensor->Is_First_Captured = 0;
-  //
-  //     __HAL_TIM_SET_CAPTUREPOLARITY(htim, channel, TIM_INPUTCHANNELPOLARITY_RISING);
-  //   }
-  // }
 /* USER CODE END 0 */
 
 /**
@@ -240,7 +140,7 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  ultrasonicDir currDir;
+  ultrasonicDir_t currDir;
   while (1)
   {
     // reality - CANNOT trigger all 3 sensors simultaneously: otherwise, we get interference
@@ -252,18 +152,17 @@ int main(void)
         currDir = i;
 
         // reset the current sensor's values if they were left in the air previously
-        sensors[i].Is_First_Captured = 0;
-        sensors[i].Distance = 999;
+        HCSR04_Reset(currDir);
 
         HCSR04_Trigger(currDir);
         HAL_Delay(50);
 
         // watchdog for if the current sensor doesn't receive echo => is_first_captured becomes stuck at 1 forever
-        if (sensors[i].Is_First_Captured == 1) {
-          sensors[i].Is_First_Captured = 0;
-        }
+        // if (sensors[i].Is_First_Captured == 1) {
+        //   sensors[i].Is_First_Captured = 0;
+        // }
 
-        if(sensors[i].Distance <= 5) {
+        if(HCSR04_GetDistance(i) <= 5) { //  sensors[i].Distance <= 5
           HAL_GPIO_WritePin(GPIOD, ledPins[i], GPIO_PIN_SET);
         }
         else {

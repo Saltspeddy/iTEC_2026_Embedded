@@ -19,11 +19,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_host.h"
-#include "../Inc/pwm_motors.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "../Inc/pwm_motors.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
