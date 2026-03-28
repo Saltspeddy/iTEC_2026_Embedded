@@ -35,6 +35,12 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+typedef enum {
+  ROBOT_IDLE = 0,
+  ROBOT_WAITING_MODE,
+  ROBOT_MAP_MODE,
+  ROBOT_TRAVERSE_MODE
+} robot_state_t;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -56,7 +62,9 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint8_t rxData;
-uint8_t stopSignal;
+volatile uint8_t stopSignal = 1;
+volatile robot_state_t robotState = ROBOT_IDLE;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -76,7 +84,12 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t rxData;
+#define HALL_PULSES_PER_REVOLUTION 4U
+#define ROTATE_90_REVOLUTIONS      1U
+#define ROTATE_90_PULSE_TARGET     2U
+#define ROTATE_90_SPEED            485U
+#define ROTATE_90_TIMEOUT_MS       1500U
+#define COMPENSATE 15
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
@@ -86,6 +99,61 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   Hall_sensor_counter(GPIO_Pin);
+}
+
+void Rotate_90_degrees(motor_dir_t rotate_dir) {
+  uint32_t startTick;
+
+  if ((rotate_dir != LEFT_DIR) && (rotate_dir != RIGHT_DIR)) {
+    return;
+  }
+
+  Motor_SetSpeed(BOTH_MOTORS, 0);
+
+  HAL_Delay(50); // let motors fully stop before resetting counters
+
+  __disable_irq();
+  pulse_left = 0;
+  pulse_right = 0;
+  __enable_irq();
+
+  Motor_ChangeDirection(rotate_dir);
+  Motor_SetSpeed(LEFT_MOTOR, ROTATE_90_SPEED + COMPENSATE);
+  Motor_SetSpeed(RIGHT_MOTOR, ROTATE_90_SPEED - COMPENSATE);
+
+  startTick = HAL_GetTick();
+  while (1) {
+    uint32_t leftPulses;
+    uint32_t rightPulses;
+
+    __disable_irq();
+    leftPulses = pulse_left;
+    rightPulses = pulse_right;
+    __enable_irq();
+
+    if (leftPulses >= ROTATE_90_PULSE_TARGET) {
+      Motor_SetSpeed(LEFT_MOTOR, 0);
+    }
+
+    if (rightPulses >= ROTATE_90_PULSE_TARGET) {
+      Motor_SetSpeed(RIGHT_MOTOR, 0);
+    }
+
+    if ((leftPulses >= ROTATE_90_PULSE_TARGET) &&
+        (rightPulses >= ROTATE_90_PULSE_TARGET)) {
+      break;
+    }
+
+    // Timeout: stop everything and bail out
+    if ((HAL_GetTick() - startTick) > ROTATE_90_TIMEOUT_MS)
+    {
+      Motor_SetSpeed(BOTH_MOTORS, 0);
+      break;
+    }
+  }
+
+  Motor_SetSpeed(BOTH_MOTORS, 0);
+  Motor_ChangeDirection(FORWARD_DIR);
 }
 /* USER CODE END 0 */
 
@@ -136,25 +204,44 @@ int main(void)
   Motor_Init(&htim3);
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
+  Motor_SetSpeed(BOTH_MOTORS, 0);
   /* USER CODE END 2 */
-
+  Rotate_90_degrees(RIGHT_DIR);
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     Ultrasonic_Update();
     MX_USB_HOST_Process();
+    Motor_SetSpeed(BOTH_MOTORS, 0);
 
-    if (!stopSignal) {
-      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
 
-      if (HCSR04_GetDistance(CENTER) > 10) {
-        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
 
-        if (currentMotorDir != FORWARD_DIR) {
-          Motor_ChangeDirection(FORWARD_DIR);
-          currentMotorDir = FORWARD_DIR;
-        }
+    // switch (robotState) {
+    //   case ROBOT_IDLE:
+    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
+    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+    //     break;
+    //
+    //   case ROBOT_WAITING_MODE:
+    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+    //     break;
+    //
+    //   case ROBOT_MAP_MODE:
+    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+    //     break;
+    //
+    //   case ROBOT_TRAVERSE_MODE:
+    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+    //     break;
+    // }
 
         Motor_SetSpeed(LEFT_MOTOR, 300);
         Motor_SetSpeed(RIGHT_MOTOR, 300);
@@ -597,15 +684,28 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if(huart->Instance==USART2)
   {
-    if(rxData=='N' || rxData=='n')
-    {
-      stopSignal = 1;
-      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
-    }
-    else if (rxData=='Y' || rxData=='y')
+    if(rxData=='Y' || rxData=='y')
     {
       stopSignal = 0;
-      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
+      robotState = ROBOT_WAITING_MODE;
+    }
+    else if (rxData=='N' || rxData=='n')
+    {
+      stopSignal = 1;
+      robotState = ROBOT_IDLE;
+      Motor_SetSpeed(BOTH_MOTORS, 0);
+    }
+    else if ((rxData == 'M') || (rxData == 'm'))
+    {
+      if (robotState == ROBOT_WAITING_MODE) {
+        robotState = ROBOT_MAP_MODE;
+      }
+    }
+    else if ((rxData == 'T') || (rxData == 't'))
+    {
+      if (robotState == ROBOT_WAITING_MODE) {
+        robotState = ROBOT_TRAVERSE_MODE;
+      }
     }
     HAL_UART_Receive_IT(&huart2,&rxData,1); // Enabling interrupt receive again
   }

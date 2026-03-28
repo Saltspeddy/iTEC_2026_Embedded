@@ -1,9 +1,11 @@
 #include "../Inc/YS-27.h"
 #include "main.h"
 
-#define MAGNETS_PER_REVOLUTION 2 // How many magnets are attached to each wheel
+#define MAGNETS_PER_REVOLUTION 4 // How many magnets are attached to each wheel
 #define WHEEL_DIAMETER 0.065f
 #define PI 3.1415926f
+#define DEBOUNCE_MS 20U  // tune this — minimum time between valid pulses
+
 
 volatile uint32_t pulse_left = 0;
 volatile uint32_t pulse_right = 0;
@@ -13,11 +15,27 @@ float speedRight = 0.0f;
 
 void Hall_sensor_counter(uint16_t GPIO_Pin)
 {
+    static uint32_t lastTimeleft  = 0;
+    static uint32_t lastTimeRight = 0;
+    uint32_t now = HAL_GetTick();
+
     if (GPIO_Pin == Hall_sensor_left_Pin)
-        pulse_left++;
+    {
+        if ((now - lastTimeleft) >= DEBOUNCE_MS)
+        {
+            pulse_left++;
+            lastTimeleft = now;
+        }
+    }
 
     if (GPIO_Pin == Hall_sensor_right_Pin)
-        pulse_right++;
+    {
+        if ((now - lastTimeRight) >= DEBOUNCE_MS)
+        {
+            pulse_right++;
+            lastTimeRight = now;
+        }
+    }
 }
 
 void Speed_Update(float dt) // dt is the update period
