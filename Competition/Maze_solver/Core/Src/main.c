@@ -91,6 +91,11 @@ void MX_USB_HOST_Process(void);
 #define ROTATE_90_TIMEOUT_MS       1500U
 #define COMPENSATE 15
 
+#define ROTATE_SPEED        490U  // keep this constant during calibration
+#define ROTATE_LEFT_MS      320U  // tune this
+#define ROTATE_RIGHT_MS     320U  // tune this separately
+#define ROTATE_180_MS       620U // start at 2× your average of left/right, then tune
+
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   HCSR04_ProcessEcho(htim);
@@ -101,60 +106,98 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   Hall_sensor_counter(GPIO_Pin);
 }
 
-void Rotate_90_degrees(motor_dir_t rotate_dir) {
-  uint32_t startTick;
+void Rotate_90_degrees(motor_dir_t rotate_dir)
+{
+  uint32_t duration_ms;
 
-  if ((rotate_dir != LEFT_DIR) && (rotate_dir != RIGHT_DIR)) {
+  if (rotate_dir == LEFT_DIR)
+    duration_ms = ROTATE_LEFT_MS;
+  else if (rotate_dir == RIGHT_DIR)
+    duration_ms = ROTATE_RIGHT_MS;
+  else
     return;
-  }
 
   Motor_SetSpeed(BOTH_MOTORS, 0);
-
-  HAL_Delay(50); // let motors fully stop before resetting counters
-
-  __disable_irq();
-  pulse_left = 0;
-  pulse_right = 0;
-  __enable_irq();
+  HAL_Delay(100);
 
   Motor_ChangeDirection(rotate_dir);
-  Motor_SetSpeed(LEFT_MOTOR, ROTATE_90_SPEED + COMPENSATE);
-  Motor_SetSpeed(RIGHT_MOTOR, ROTATE_90_SPEED - COMPENSATE);
-
-  startTick = HAL_GetTick();
-  while (1) {
-    uint32_t leftPulses;
-    uint32_t rightPulses;
-
-    __disable_irq();
-    leftPulses = pulse_left;
-    rightPulses = pulse_right;
-    __enable_irq();
-
-    if (leftPulses >= ROTATE_90_PULSE_TARGET) {
-      Motor_SetSpeed(LEFT_MOTOR, 0);
-    }
-
-    if (rightPulses >= ROTATE_90_PULSE_TARGET) {
-      Motor_SetSpeed(RIGHT_MOTOR, 0);
-    }
-
-    if ((leftPulses >= ROTATE_90_PULSE_TARGET) &&
-        (rightPulses >= ROTATE_90_PULSE_TARGET)) {
-      break;
-    }
-
-    // Timeout: stop everything and bail out
-    if ((HAL_GetTick() - startTick) > ROTATE_90_TIMEOUT_MS)
-    {
-      Motor_SetSpeed(BOTH_MOTORS, 0);
-      break;
-    }
-  }
-
+  Motor_SetSpeed(BOTH_MOTORS, ROTATE_SPEED);
+  HAL_Delay(duration_ms);
   Motor_SetSpeed(BOTH_MOTORS, 0);
+
+  HAL_Delay(50);
   Motor_ChangeDirection(FORWARD_DIR);
 }
+
+void Rotate_180_degrees(void)
+{
+  Motor_SetSpeed(BOTH_MOTORS, 0);
+  HAL_Delay(100);
+
+  Motor_ChangeDirection(LEFT_DIR); // pick one direction and keep it consistent
+  Motor_SetSpeed(BOTH_MOTORS, ROTATE_SPEED);
+  HAL_Delay(ROTATE_180_MS);
+  Motor_SetSpeed(BOTH_MOTORS, 0);
+
+  HAL_Delay(50);
+  Motor_ChangeDirection(FORWARD_DIR);
+}
+
+
+// void Rotate_90_degrees(motor_dir_t rotate_dir) {
+//   uint32_t startTick;
+//
+//   if ((rotate_dir != LEFT_DIR) && (rotate_dir != RIGHT_DIR)) {
+//     return;
+//   }
+//
+//   Motor_SetSpeed(BOTH_MOTORS, 0);
+//
+//   HAL_Delay(50); // let motors fully stop before resetting counters
+//
+//   __disable_irq();
+//   pulse_left = 0;
+//   pulse_right = 0;
+//   __enable_irq();
+//
+//   Motor_ChangeDirection(rotate_dir);
+//   Motor_SetSpeed(LEFT_MOTOR, ROTATE_90_SPEED + COMPENSATE);
+//   Motor_SetSpeed(RIGHT_MOTOR, ROTATE_90_SPEED - COMPENSATE);
+//
+//   startTick = HAL_GetTick();
+//   while (1) {
+//     uint32_t leftPulses;
+//     uint32_t rightPulses;
+//
+//     __disable_irq();
+//     leftPulses = pulse_left;
+//     rightPulses = pulse_right;
+//     __enable_irq();
+//
+//     if (leftPulses >= ROTATE_90_PULSE_TARGET) {
+//       Motor_SetSpeed(LEFT_MOTOR, 0);
+//     }
+//
+//     if (rightPulses >= ROTATE_90_PULSE_TARGET) {
+//       Motor_SetSpeed(RIGHT_MOTOR, 0);
+//     }
+//
+//     if ((leftPulses >= ROTATE_90_PULSE_TARGET) &&
+//         (rightPulses >= ROTATE_90_PULSE_TARGET)) {
+//       break;
+//     }
+//
+//     // Timeout: stop everything and bail out
+//     if ((HAL_GetTick() - startTick) > ROTATE_90_TIMEOUT_MS)
+//     {
+//       Motor_SetSpeed(BOTH_MOTORS, 0);
+//       break;
+//     }
+//   }
+//
+//   Motor_SetSpeed(BOTH_MOTORS, 0);
+//   Motor_ChangeDirection(FORWARD_DIR);
+// }
 /* USER CODE END 0 */
 
 /**
@@ -206,7 +249,8 @@ int main(void)
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
   Motor_SetSpeed(BOTH_MOTORS, 0);
   /* USER CODE END 2 */
-  Rotate_90_degrees(RIGHT_DIR);
+  // Rotate_90_degrees(RIGHT_DIR);
+  Rotate_180_degrees();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -242,27 +286,6 @@ int main(void)
     //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
     //     break;
     // }
-
-        Motor_SetSpeed(LEFT_MOTOR, 300);
-        Motor_SetSpeed(RIGHT_MOTOR, 300);
-      }
-      else {
-        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
-
-        if (currentMotorDir != LEFT_DIR) {
-          Motor_ChangeDirection(LEFT_DIR);
-          currentMotorDir = LEFT_DIR;
-        }
-
-        Motor_SetSpeed(LEFT_MOTOR, 300);
-        Motor_SetSpeed(RIGHT_MOTOR, 300);
-      }
-    }
-    else {
-      Motor_SetSpeed(LEFT_MOTOR, 0);
-      Motor_SetSpeed(RIGHT_MOTOR, 0);
-      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
-    }
 
     /* USER CODE END WHILE */
 
