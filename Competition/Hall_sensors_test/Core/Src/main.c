@@ -35,6 +35,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
+#define MAGNETS_PER_REVOLUTION 2 // How many magnets are attached to each wheel
+#define WHEEL_DIAMETER 0.065f // 6.5 cm wheel
+#define PI 3.14159265358979323846f
 
 /* USER CODE END PD */
 
@@ -137,16 +140,23 @@ int main(void)
    {
      last_tick = now;
 
+     float rev_left  = (float)pulse_left  / MAGNETS_PER_REVOLUTION;
+     float rev_right = (float)pulse_right / MAGNETS_PER_REVOLUTION;
 
-     // HAL_UART_Transmit(&huart2, (uint8_t*)"L:", 2, HAL_MAX_DELAY);
-     // HAL_UART_Transmit(&huart2, (uint8_t*)&pulse_left, 4, HAL_MAX_DELAY);
-     // HAL_UART_Transmit(&huart2, (uint8_t*)" R:", 3, HAL_MAX_DELAY);
-     // HAL_UART_Transmit(&huart2, (uint8_t*)&pulse_right, 4, HAL_MAX_DELAY);
-     // HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+     float rpm_left  = rev_left  * 60.0f;
+     float rpm_right = rev_right * 60.0f;
 
-     snprintf(buffer, sizeof(buffer), "L:%lu R:%lu\r\n", pulse_left, pulse_right);
+     float circumference = PI * WHEEL_DIAMETER;
+
+     float speed_left  = rev_left  * circumference;  // m/s
+     float speed_right = rev_right * circumference;  // m/s
+
+     char buffer[100];
+     snprintf(buffer, sizeof(buffer),
+         "L: %.2f RPM (%.2f m/s) | R: %.2f RPM (%.2f m/s)\r\n",
+         rpm_left, speed_left, rpm_right, speed_right);
+
      HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-
 
      pulse_left  = 0;
      pulse_right = 0;
@@ -456,11 +466,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-
-// How many magnets are attached to each deadwheel
-#define MAGNETS_PER_REVOLUTION 1   // change to however many magnets you glued on
-
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if(huart->Instance==USART2)
