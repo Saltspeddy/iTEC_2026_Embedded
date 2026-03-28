@@ -25,6 +25,5 @@ void HCSR04_ProcessEcho(TIM_HandleTypeDef *htim);
 void HCSR04_Trigger(ultrasonicDir_t currDir);
 float HCSR04_GetDistance(ultrasonicDir_t dir);
 void HCSR04_Reset(ultrasonicDir_t dir);
-void Ultrasonic_Update(void);
 
 #endif //ULTRASONIC_3_SENSORS_BLUETOOTH_CONTROL_ULTRASONIC_SENSORS_H

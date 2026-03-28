@@ -75,7 +75,6 @@ void MX_USB_HOST_Process(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint8_t rxData;
-uint32_t last_tick;
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -120,8 +119,6 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  last_tick = HAL_GetTick();
-  char buffer[50];
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   /* USER CODE END 2 */
 
@@ -130,28 +127,11 @@ int main(void)
   while (1)
   {
     MX_USB_HOST_Process();
-    uint32_t now = HAL_GetTick();
+
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    if ((now - last_tick) >= 1000) {
-      last_tick = now;
-
-
-      // HAL_UART_Transmit(&huart2, (uint8_t*)"L:", 2, HAL_MAX_DELAY);
-      // HAL_UART_Transmit(&huart2, (uint8_t*)&pulse_left, 4, HAL_MAX_DELAY);
-      // HAL_UART_Transmit(&huart2, (uint8_t*)" R:", 3, HAL_MAX_DELAY);
-      // HAL_UART_Transmit(&huart2, (uint8_t*)&pulse_right, 4, HAL_MAX_DELAY);
-      // HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
-
-      snprintf(buffer, sizeof(buffer), "L:%lu R:%lu\r\n", pulse_left, pulse_right);
-      HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-
-
-
-      pulse_left  = 0;
-      pulse_right = 0;
-    }
   }
   /* USER CODE END 3 */
 }

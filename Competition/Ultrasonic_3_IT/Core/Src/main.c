@@ -136,41 +136,39 @@ int main(void)
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
   DWT_Init();
+  ultrasonicDir_t currDir;
+  uint8_t currentSensor = 0;
+  uint32_t lastTriggerTime = 0;
+  uint8_t sensorState = 0; // 0 = ready to trigger, 1 = waiting (50ms gap)
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  ultrasonicDir_t currDir;
   while (1)
   {
-    // reality - CANNOT trigger all 3 sensors simultaneously: otherwise, we get interference
-    // need 50 ms (at least 30 ms) between each sensor
-    uint16_t ledPins[3] = {GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14};
-    if (!stopSignal) {
+    Ultrasonic_Update();
+
+    if (!stopSignal)
+    {
       HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
-      for (int i = 0; i < 3; i++) {
-        currDir = i;
 
-        // reset the current sensor's values if they were left in the air previously
-        HCSR04_Reset(currDir);
+      if (HCSR04_GetDistance(CENTER) < 10)
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+      else
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
 
-        HCSR04_Trigger(currDir);
-        HAL_Delay(50);
+      if (HCSR04_GetDistance(LEFT) < 10)
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+      else
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 
-        // watchdog for if the current sensor doesn't receive echo => is_first_captured becomes stuck at 1 forever
-        // if (sensors[i].Is_First_Captured == 1) {
-        //   sensors[i].Is_First_Captured = 0;
-        // }
-
-        if(HCSR04_GetDistance(i) <= 5) { //  sensors[i].Distance <= 5
-          HAL_GPIO_WritePin(GPIOD, ledPins[i], GPIO_PIN_SET);
-        }
-        else {
-          HAL_GPIO_WritePin(GPIOD, ledPins[i], GPIO_PIN_RESET);
-        }
-      }
+      if (HCSR04_GetDistance(RIGHT) < 10)
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
+      else
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
     }
-    else {
+    else
+    {
       HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
     }
     /* USER CODE END WHILE */
