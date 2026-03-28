@@ -79,3 +79,63 @@ void Motor_ChangeDirection(motor_dir_t dir)
             break;
     }
 }
+
+/**
+ * @brief  Compute per-motor PWM values that keep the robot
+ *         centred between the side walls.
+ *
+ * @param  distLeft   Distance reported by left  HC-SR04 (cm)
+ * @param  distRight  Distance reported by right HC-SR04 (cm)
+ * @param  pwmLeft    Output: PWM for left  motor
+ * @param  pwmRight   Output: PWM for right motor
+ */
+void WallCorrection_Compute(float distLeft,
+                                   float distRight,
+                                   uint16_t *pwmLeft,
+                                   uint16_t *pwmRight)
+{
+    int correction = 0;
+
+    /* Only correct when both walls are visible */
+    if (distLeft < WALL_DETECT_CM && distRight < WALL_DETECT_CM)
+    {
+        /*
+         * Positive error  → left wall is closer
+         *                  → we've drifted left
+         *                  → need to steer right
+         *                     (slow left, speed right)
+         */
+        float error = distLeft - distRight;
+        correction  = (int)(error / WALL_GAIN);
+        correction  = clamp_int(correction, -MAX_CORRECTION, MAX_CORRECTION);
+    }
+    else if (distLeft < WALL_DETECT_CM)
+    {
+        /*
+         * Only left wall visible — hug it gently.
+         * A fixed small correction nudges us away.
+         */
+        correction = 3;
+    }
+    else if (distRight < WALL_DETECT_CM)
+    {
+        correction = -3;
+    }
+
+    /*
+     * Apply: left motor gets  (base - correction)
+     *        right motor gets (base + correction)
+     *
+     * Example: drifted left (correction > 0)
+     *   left slows  → turns robot back right
+     */
+    *pwmLeft  = (uint16_t)clamp_int(PWM_BASE - correction, PWM_MIN, PWM_MAX_SPEED);
+    *pwmRight = (uint16_t)clamp_int(PWM_BASE + correction, PWM_MIN, PWM_MAX_SPEED);
+}
+
+int clamp_int(int v, int lo, int hi)
+{
+    if (v < lo) return lo;
+    if (v > hi) return hi;
+    return v;
+}

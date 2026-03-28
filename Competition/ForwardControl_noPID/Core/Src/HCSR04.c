@@ -5,7 +5,9 @@ static uint8_t currentSensor = 0;
 static uint32_t lastTriggerTime = 0;
 static uint8_t sensorState = 0;
 
-#define SENSOR_DELAY_MS 10
+#define SENSOR_DELAY_MS 30 // this value is important because if it is too small,
+// in the function Ultrasonic_Update(), reset will be called during an echo for longer distances
+// , it will not wait for echo enough
 
 // reality - CANNOT trigger all 3 sensors simultaneously: otherwise, we get interference
 // need 50 ms (at least 30 ms) between each sensor
