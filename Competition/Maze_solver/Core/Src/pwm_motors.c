@@ -22,12 +22,12 @@ void Motor_SetSpeed(motor_t motor, uint16_t speed)
     {
         case LEFT_MOTOR:
             leftMotorSpeed = speed;
-            motorTim->Instance->CCR3 = speed;
+            motorTim->Instance->CCR4 = speed;
             break;
 
         case RIGHT_MOTOR:
             rightMotorSpeed = speed;
-            motorTim->Instance->CCR4 = speed;
+            motorTim->Instance->CCR3 = speed;
             break;
 
         case BOTH_MOTORS:

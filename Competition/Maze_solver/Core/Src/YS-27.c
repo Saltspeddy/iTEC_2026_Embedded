@@ -1,7 +1,7 @@
 #include "../Inc/YS-27.h"
 #include "main.h"
 
-#define MAGNETS_PER_REVOLUTION 2 // How many magnets are attached to each wheel
+#define MAGNETS_PER_REVOLUTION 4 // How many magnets are attached to each wheel
 #define WHEEL_DIAMETER 0.065f
 #define PI 3.1415926f
 #define DEBOUNCE_MS 20U  // tune this — minimum time between valid pulses

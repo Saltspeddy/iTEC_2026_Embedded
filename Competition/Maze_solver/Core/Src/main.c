@@ -87,9 +87,9 @@ void MX_USB_HOST_Process(void);
 #define HALL_PULSES_PER_REVOLUTION 4U
 #define ROTATE_90_REVOLUTIONS      1U
 #define ROTATE_90_PULSE_TARGET     2U
-#define ROTATE_90_SPEED            495U
+#define ROTATE_90_SPEED            485U
 #define ROTATE_90_TIMEOUT_MS       1500U
-#define COMPENSATE 5
+#define COMPENSATE 15
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
@@ -206,7 +206,7 @@ int main(void)
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
   Motor_SetSpeed(BOTH_MOTORS, 0);
   /* USER CODE END 2 */
-  Rotate_90_degrees(LEFT_DIR);
+  Rotate_90_degrees(RIGHT_DIR);
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
