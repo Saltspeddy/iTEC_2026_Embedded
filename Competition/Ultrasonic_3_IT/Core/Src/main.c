@@ -136,41 +136,62 @@ int main(void)
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
   DWT_Init();
+  ultrasonicDir_t currDir;
+  uint8_t currentSensor = 0;
+  uint32_t lastTriggerTime = 0;
+  uint8_t sensorState = 0; // 0 = ready to trigger, 1 = waiting (50ms gap)
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  ultrasonicDir_t currDir;
   while (1)
   {
     // reality - CANNOT trigger all 3 sensors simultaneously: otherwise, we get interference
     // need 50 ms (at least 30 ms) between each sensor
-    uint16_t ledPins[3] = {GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14};
-    if (!stopSignal) {
+
+    uint16_t ledPins[3] = {LD3_Pin, LD4_Pin, LD5_Pin};
+
+    if (!stopSignal)
+    {
       HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
-      for (int i = 0; i < 3; i++) {
-        currDir = i;
 
-        // reset the current sensor's values if they were left in the air previously
-        HCSR04_Reset(currDir);
+      switch(sensorState)
+      {
+        case 0: // Trigger sensor
+          HCSR04_Reset(currentSensor);
+          HCSR04_Trigger(currentSensor);
 
-        HCSR04_Trigger(currDir);
-        HAL_Delay(50);
+          lastTriggerTime = HAL_GetTick(); // current time in ms
+          sensorState = 1;
+          break;
 
-        // watchdog for if the current sensor doesn't receive echo => is_first_captured becomes stuck at 1 forever
-        // if (sensors[i].Is_First_Captured == 1) {
-        //   sensors[i].Is_First_Captured = 0;
-        // }
+        case 1: // Wait 50ms (non-blocking)
+          if (HAL_GetTick() - lastTriggerTime >= 50)
+          {
+            // Process result
+            if (HCSR04_GetDistance(currentSensor) <= 5)
+            {
+              HAL_GPIO_WritePin(GPIOD, ledPins[currentSensor], GPIO_PIN_SET);
+            }
+            else
+            {
+              HAL_GPIO_WritePin(GPIOD, ledPins[currentSensor], GPIO_PIN_RESET);
+            }
 
-        if(HCSR04_GetDistance(i) <= 5) { //  sensors[i].Distance <= 5
-          HAL_GPIO_WritePin(GPIOD, ledPins[i], GPIO_PIN_SET);
-        }
-        else {
-          HAL_GPIO_WritePin(GPIOD, ledPins[i], GPIO_PIN_RESET);
-        }
+            // Move to next sensor
+            currentSensor = (currentSensor + 1) % 3;
+
+            sensorState = 0;
+          }
+          break;
+
+        default:
+          sensorState = 0;
+          break;
       }
     }
-    else {
+    else
+    {
       HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
     }
     /* USER CODE END WHILE */
