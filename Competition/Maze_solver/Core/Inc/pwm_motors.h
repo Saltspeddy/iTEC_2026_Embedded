@@ -18,6 +18,8 @@ typedef enum {
     RIGHT_DIR = 8
 } motor_dir_t;
 
+extern motor_dir_t currentMotorDir;
+
 void Motor_Init(TIM_HandleTypeDef *htim);
 void Motor_SetSpeed(motor_t motor, uint16_t speed);
 void Motor_ChangeDirection(motor_dir_t dir);

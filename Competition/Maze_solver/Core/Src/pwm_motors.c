@@ -5,6 +5,8 @@ static uint16_t leftMotorSpeed = 0;
 static uint16_t rightMotorSpeed = 0;
 static TIM_HandleTypeDef *motorTim;
 
+motor_dir_t currentMotorDir = FORWARD_DIR;
+
 void Motor_Init(TIM_HandleTypeDef *htim)
 {
     motorTim = htim;

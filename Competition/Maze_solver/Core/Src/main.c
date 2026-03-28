@@ -25,6 +25,8 @@
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
+#include "HCSR04.h"
+#include "pwm_motors.h"
 #include "../Inc/YS-27.h"
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
@@ -33,7 +35,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MAGNETS_PER_REVOLUTION 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,7 +55,8 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+uint8_t rxData;
+uint8_t stopSignal;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -75,6 +77,11 @@ void MX_USB_HOST_Process(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint8_t rxData;
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  HCSR04_ProcessEcho(htim);
+}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -119,15 +126,54 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  // for ultrasound
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
+  DWT_Init();
+
+  Motor_Init(&htim3);
+  HAL_UART_Receive_IT(&huart2, &rxData, 1);
+  Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    Ultrasonic_Update();
     MX_USB_HOST_Process();
 
+    if (!stopSignal) {
+      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+
+      if (HCSR04_GetDistance(CENTER) > 10) {
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+
+        if (currentMotorDir != FORWARD_DIR) {
+          Motor_ChangeDirection(FORWARD_DIR);
+          currentMotorDir = FORWARD_DIR;
+        }
+
+        Motor_SetSpeed(LEFT_MOTOR, 300);
+        Motor_SetSpeed(RIGHT_MOTOR, 300);
+      }
+      else {
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+
+        if (currentMotorDir != LEFT_DIR) {
+          Motor_ChangeDirection(LEFT_DIR);
+          currentMotorDir = LEFT_DIR;
+        }
+
+        Motor_SetSpeed(LEFT_MOTOR, 300);
+        Motor_SetSpeed(RIGHT_MOTOR, 300);
+      }
+    }
+    else {
+      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
+    }
 
     /* USER CODE END WHILE */
 
