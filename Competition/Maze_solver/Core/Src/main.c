@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
-
+#include "../Inc/YS-27.h"
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -75,9 +75,12 @@ void MX_USB_HOST_Process(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 uint8_t rxData;
-volatile uint32_t pulse_left = 0;
-volatile uint32_t pulse_right = 0;
 uint32_t last_tick;
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  Hall_sensor_counter(GPIO_Pin);
+}
 /* USER CODE END 0 */
 
 /**
@@ -577,16 +580,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     HAL_UART_Receive_IT(&huart2,&rxData,1); // Enabling interrupt receive again
   }
 }
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == Hall_sensor_left_Pin)
-    pulse_left++;
-
-  if (GPIO_Pin == Hall_sensor_right_Pin)
-    pulse_right++;
-}
-
 
 /* USER CODE END 4 */
 
