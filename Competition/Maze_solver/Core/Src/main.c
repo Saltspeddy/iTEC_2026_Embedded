@@ -566,13 +566,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if(huart->Instance==USART2)
   {
-    if(rxData==78) // Ascii value of 'N' is 78 (N for NO)
+    if(rxData=='N' || rxData=='n')
     {
-      HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
     }
-    else if (rxData==89) // Ascii value of 'Y' is 89 (Y for YES)
+    else if (rxData=='Y' || rxData=='y')
     {
-      HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
     }
     HAL_UART_Receive_IT(&huart2,&rxData,1); // Enabling interrupt receive again
   }
