@@ -76,8 +76,6 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t rxData;
-
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   HCSR04_ProcessEcho(htim);
