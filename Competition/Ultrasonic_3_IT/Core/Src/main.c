@@ -136,14 +136,11 @@ int main(void)
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_3);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_4);
   DWT_Init();
-  ultrasonicDir_t currDir;
-  uint8_t currentSensor = 0;
-  uint32_t lastTriggerTime = 0;
-  uint8_t sensorState = 0; // 0 = ready to trigger, 1 = waiting (50ms gap)
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  ultrasonicDir_t currDir;
   while (1)
   {
     Ultrasonic_Update();
