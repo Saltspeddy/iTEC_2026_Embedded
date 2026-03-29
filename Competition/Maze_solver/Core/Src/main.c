@@ -24,6 +24,11 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
+// #include "YS-27.h"
+#include "HCSR04.h"
+#include "pwm_motors.h"
+#include "mapping.h"
+#include "maze.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +64,15 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+#define WHEEL_MAGNETS        4U          // magnets per wheel
+#define WHEEL_DIAMETER_MM    65.0f       // adjust to your actual wheel diameter
+#define WHEEL_CIRC_CM        (3.14159f * WHEEL_DIAMETER_MM / 10.0f)
+#define SPEED_INTERVAL_MS    500U        // compute speed every 200 ms
+
+volatile uint32_t hall_count_left  = 0;
+volatile uint32_t hall_count_right = 0;
+static uint32_t last_speed_tick = 0;
+
 static uint8_t  coord_buf[16];
 static uint8_t  coord_idx  = 0;
 static uint8_t  awaiting_coords = 0;
@@ -82,7 +96,8 @@ static void MX_USART2_UART_Init(void);
 void MX_USB_HOST_Process(void);
 
 /* USER CODE BEGIN PFP */
-
+void Hall_sensor_counter(uint16_t GPIO_Pin);
+void Speed_Update_Telemetry(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -135,6 +150,9 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  // for hall telemetry
+  last_speed_tick = HAL_GetTick(); //in user code begin 2
+
   // for ultrasound
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_2);
@@ -150,9 +168,12 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  // Rotate_90_degrees(RIGHT_DIR);
+  // Rotate_180_degrees();
   while (1)
   {
     Ultrasonic_Update();      /* always keep sensors cycling — non-blocking */
+    Speed_Update_Telemetry();
     MX_USB_HOST_Process();
 
     switch (robotState)
@@ -449,9 +470,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 83;
+  htim3.Init.Prescaler = 20;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 499;
+  htim3.Init.Period = 49;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -622,6 +643,47 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+// Called from HAL_GPIO_EXTI_Callback — already wired up in your code
+void Hall_sensor_counter(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == Hall_sensor_left_Pin)       // PB13
+    hall_count_left++;
+  else if (GPIO_Pin == Hall_sensor_right_Pin) // PB14
+    hall_count_right++;
+}
+
+// Call this from the main loop, same as Ultrasonic_Update()
+void Speed_Update_Telemetry(void)
+{
+  uint32_t now = HAL_GetTick();
+  if ((now - last_speed_tick) < SPEED_INTERVAL_MS)
+    return;
+
+  // Snapshot and reset counters atomically
+  __disable_irq();
+  uint32_t pulses_left  = hall_count_left;
+  uint32_t pulses_right = hall_count_right;
+  hall_count_left  = 0;
+  hall_count_right = 0;
+  __enable_irq();
+
+  float dt_s = (float)(now - last_speed_tick) / 1000.0f;
+  last_speed_tick = now;
+
+  // rotations = pulses / magnets_per_revolution
+  // speed (cm/s) = rotations * circumference / dt
+  float speed_left  = ((float)pulses_left  / WHEEL_MAGNETS) * WHEEL_CIRC_CM / dt_s;
+  float speed_right = ((float)pulses_right / WHEEL_MAGNETS) * WHEEL_CIRC_CM / dt_s;
+  float speed_avg   = (speed_left + speed_right) / 2.0f;
+
+  char buf[64];
+  int len = snprintf(buf, sizeof(buf),
+      "SPD L:%d R:%d A:%d cm/s\r\n",
+      (int)speed_left, (int)speed_right, (int)speed_avg);
+  HAL_UART_Transmit(&huart2, (uint8_t*)buf, len, 10);
+}
+//before HAL_UART-RxCpltCallback()
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance != USART2) return;

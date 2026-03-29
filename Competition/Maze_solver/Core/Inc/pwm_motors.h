@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 
-#define PWM_MAX 499
+#define PWM_MAX 49
 
 typedef enum {
     LEFT_MOTOR = 3,

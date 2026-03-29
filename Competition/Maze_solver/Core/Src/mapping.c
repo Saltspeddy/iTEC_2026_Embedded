@@ -9,10 +9,8 @@
 /* -----------------------------------------------------------------------
  * Physical constants — tune these to your robot
  * ----------------------------------------------------------------------- */
-#define MOVE_SPEED              490U
-#define MOVE_TIME_MS            900
-#define ROTATE_90_TIME_MS       600U
-#define ROTATE_SPEED            220U    /* rotation uses lower speed for accuracy */
+#define MOVE_SPEED              30U
+#define MOVE_TIME_MS            700
 #define WALL_OPEN_THRESHOLD_CM  13.0f
 
 /* -----------------------------------------------------------------------
@@ -102,8 +100,9 @@ static void do_rotate_to(heading_t target)
     } else if (cw == 1) {
         Rotate_90_degrees(RIGHT_DIR);
     } else if (cw == 2) {
-        Rotate_90_degrees(RIGHT_DIR);
-        Rotate_90_degrees(RIGHT_DIR);
+        Rotate_180_degrees();
+        // Rotate_90_degrees(RIGHT_DIR);
+        // Rotate_90_degrees(RIGHT_DIR);
     } else { /* cw == 3, i.e. one CCW turn */
         Rotate_90_degrees(LEFT_DIR);
     }
@@ -180,6 +179,9 @@ uint8_t Mapping_IsDone(void)
  *   MAP_SETTLE  →  MAP_SENSE  →  MAP_ROTATE  →  MAP_MOVE  →  MAP_SETTLE …
  *                                                          ↘  MAP_DONE
  */
+
+int rotateDelayFlag = 0;
+
 void Mapping_Step(void)
 {
     if (mapping_done) return;
@@ -189,8 +191,15 @@ void Mapping_Step(void)
         /* ── SETTLE ──────────────────────────────────────────────────── */
         case MAP_SETTLE:
             Ultrasonic_Update();
-            if ((HAL_GetTick() - phase_start_ms) >= SENSOR_SETTLE_MS)
-                phase = MAP_SENSE;
+            if ((HAL_GetTick() - phase_start_ms) >= SENSOR_SETTLE_MS) {
+                if (rotateDelayFlag) {
+                    phase = MAP_MOVE;
+                    rotateDelayFlag = 0;
+                }
+                else {
+                    phase = MAP_SENSE;
+                }
+            }
             break;
 
         /* ── SENSE ───────────────────────────────────────────────────── */
@@ -209,7 +218,7 @@ void Mapping_Step(void)
                 uint8_t   nr, nc;
 
                 /* 999 = no reading yet, skip. Only trust readings below max range */
-                if (dist >= WALL_OPEN_THRESHOLD_CM && dist < 200.0f &&
+                if (dist >= WALL_OPEN_THRESHOLD_CM && dist < 600.0f &&
                     neighbour(cur_row, cur_col, abs_h, &nr, &nc))
                 {
                     Maze_OpenWall(cur_row, cur_col, heading_to_wall(abs_h));
@@ -223,13 +232,13 @@ void Mapping_Step(void)
 
             /*
              * DFS: find an unvisited neighbour through an open wall.
-             * Priority: N → E → S → W (change order to taste).
+             * Priority: E → N → W → S (change order to taste).
              */
             stack_frame_t *frame = &dfs_stack[stack_top];
             uint8_t moved = 0;
 
-            heading_t priority[4] = { HEADING_N, HEADING_E,
-                                      HEADING_S, HEADING_W };
+            heading_t priority[4] = { HEADING_E, HEADING_N,
+                                      HEADING_W, HEADING_S };
 
             for (int i = 0; i < 4; i++) {
                 heading_t h = priority[i];
@@ -290,7 +299,10 @@ void Mapping_Step(void)
              * If you later want non-blocking rotation, split this phase.
              */
             do_rotate_to(target_heading);
-            phase = MAP_MOVE;
+            phase_start_ms = HAL_GetTick();
+            rotateDelayFlag = 1;
+            phase = MAP_SETTLE; /* settle sensors before next sense */
+            // phase = MAP_MOVE;
             break;
 
         /* ── MOVE ────────────────────────────────────────────────────── */

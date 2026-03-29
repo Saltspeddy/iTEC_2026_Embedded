@@ -1,10 +1,10 @@
 #include "main.h"
 #include "../Inc/pwm_motors.h"
 
-#define ROTATE_SPEED      490U
-#define ROTATE_LEFT_MS    320U
-#define ROTATE_RIGHT_MS   320U
-#define ROTATE_180_MS     620U
+#define ROTATE_SPEED      30U
+#define ROTATE_LEFT_MS    255U
+#define ROTATE_RIGHT_MS   255U
+#define ROTATE_180_MS     490U
 
 static uint16_t leftMotorSpeed = 0;
 static uint16_t rightMotorSpeed = 0;
