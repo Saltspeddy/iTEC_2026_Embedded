@@ -18,7 +18,7 @@
   button:hover { background: #3a7abe; }
   #error { color: #f88; font-size: 13px; min-height: 18px; }
   canvas { border: 2px solid #444; border-radius: 4px; }
-  .legend { display: flex; gap: 20px; font-size: 12px; color: #999; }
+  .legend { display: flex; gap: 20px; font-size: 12px; color: #999; flex-wrap: wrap; justify-content: center; }
   .legend-item { display: flex; align-items: center; gap: 6px; }
   .swatch { width: 14px; height: 14px; border-radius: 2px; }
 </style>
@@ -46,10 +46,8 @@
 <div class="legend">
   <div class="legend-item"><div class="swatch" style="background:#1a1a2e"></div> wall</div>
   <div class="legend-item"><div class="swatch" style="background:#2d2d44"></div> cell floor</div>
-  <div class="legend-item"><div class="swatch" style="background:#4a9eff"></div> north open</div>
-  <div class="legend-item"><div class="swatch" style="background:#4a9eff"></div> east open</div>
-  <div class="legend-item"><div class="swatch" style="background:#4a9eff"></div> south open</div>
-  <div class="legend-item"><div class="swatch" style="background:#4a9eff"></div> west open</div>
+  <div class="legend-item"><div class="swatch" style="background:#1a3a2a"></div> path (0xFF)</div>
+  <div class="legend-item"><div class="swatch" style="background:#4a9eff"></div> open wall</div>
 </div>
 
 <script>
@@ -86,8 +84,8 @@ function render() {
 
   const ROWS = maze.length;
   const COLS = maze[0].length;
-  const CELL = 48;       // cell interior size in px
-  const WALL = 4;        // wall thickness
+  const CELL = 48;
+  const WALL = 4;
   const STEP = CELL + WALL;
   const W = COLS * STEP + WALL;
   const H = ROWS * STEP + WALL;
@@ -97,7 +95,6 @@ function render() {
   canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // background — all walls
   ctx.fillStyle = '#1a1a2e';
   ctx.fillRect(0, 0, W, H);
 
@@ -106,47 +103,46 @@ function render() {
       const val = maze[r][c];
       const x = c * STEP + WALL;
       const y = r * STEP + WALL;
+      const isPathMarker = val === 255;
 
       // cell floor
-      ctx.fillStyle = '#2d2d44';
+      ctx.fillStyle = isPathMarker ? '#1a3a2a' : '#2d2d44';
       ctx.fillRect(x, y, CELL, CELL);
 
-      // north passage — open the wall above
-      if (val & WALL_N) {
-        ctx.fillStyle = '#2d2d44';
-        ctx.fillRect(x, y - WALL, CELL, WALL);
+      // passages — path marker cells also open passages if neighbours are path markers
+      const passColor = (nr, nc) => {
+        if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return '#2d2d44';
+        return (isPathMarker && maze[nr][nc] === 255) ? '#1a3a2a' : '#2d2d44';
+      };
+
+      if (val & WALL_N) { ctx.fillStyle = passColor(r-1, c); ctx.fillRect(x, y - WALL, CELL, WALL); }
+      if (val & WALL_S) { ctx.fillStyle = passColor(r+1, c); ctx.fillRect(x, y + CELL, CELL, WALL); }
+      if (val & WALL_E) { ctx.fillStyle = passColor(r, c+1); ctx.fillRect(x + CELL, y, WALL, CELL); }
+      if (val & WALL_W) { ctx.fillStyle = passColor(r, c-1); ctx.fillRect(x - WALL, y, WALL, CELL); }
+
+      // path marker: passages based on neighbours being path markers too
+      if (isPathMarker) {
+        if (r > 0      && maze[r-1][c] === 255) ctx.fillRect(x, y - WALL, CELL, WALL);
+        if (r < ROWS-1 && maze[r+1][c] === 255) ctx.fillRect(x, y + CELL, CELL, WALL);
+        if (c < COLS-1 && maze[r][c+1] === 255) ctx.fillRect(x + CELL, y, WALL, CELL);
+        if (c > 0      && maze[r][c-1] === 255) ctx.fillRect(x - WALL, y, WALL, CELL);
       }
 
-      // south passage
-      if (val & WALL_S) {
-        ctx.fillStyle = '#2d2d44';
-        ctx.fillRect(x, y + CELL, CELL, WALL);
-      }
-
-      // east passage
-      if (val & WALL_E) {
-        ctx.fillStyle = '#2d2d44';
-        ctx.fillRect(x + CELL, y, WALL, CELL);
-      }
-
-      // west passage
-      if (val & WALL_W) {
-        ctx.fillStyle = '#2d2d44';
-        ctx.fillRect(x - WALL, y, WALL, CELL);
-      }
-
-      // draw cell value in center
-      ctx.fillStyle = val === 0 ? '#444' : '#4a9eff';
+      // cell value label
+      ctx.fillStyle = isPathMarker ? '#88ffbb' : val === 0 ? '#444' : '#4a9eff';
       ctx.font = '11px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(val.toString(16).padStart(2,'0'), x + CELL/2, y + CELL/2);
+      ctx.fillText(isPathMarker ? 'FF' : val.toString(16).padStart(2,'0'), x + CELL/2, y + CELL/2);
 
-      // draw small directional indicators for open walls
-      if (val & WALL_N) { ctx.fillStyle = '#4a9eff'; ctx.fillRect(x + CELL/2 - 3, y + 4, 6, 4); }
-      if (val & WALL_S) { ctx.fillStyle = '#4a9eff'; ctx.fillRect(x + CELL/2 - 3, y + CELL - 8, 6, 4); }
-      if (val & WALL_E) { ctx.fillStyle = '#4a9eff'; ctx.fillRect(x + CELL - 8, y + CELL/2 - 3, 4, 6); }
-      if (val & WALL_W) { ctx.fillStyle = '#4a9eff'; ctx.fillRect(x + 4, y + CELL/2 - 3, 4, 6); }
+      // directional indicators for open walls (skip on path markers — value is 0xFF so all bits set)
+      if (!isPathMarker) {
+        ctx.fillStyle = '#4a9eff';
+        if (val & WALL_N) ctx.fillRect(x + CELL/2 - 3, y + 4,        6, 4);
+        if (val & WALL_S) ctx.fillRect(x + CELL/2 - 3, y + CELL - 8, 6, 4);
+        if (val & WALL_E) ctx.fillRect(x + CELL - 8,   y + CELL/2-3, 4, 6);
+        if (val & WALL_W) ctx.fillRect(x + 4,           y + CELL/2-3, 4, 6);
+      }
     }
   }
 }

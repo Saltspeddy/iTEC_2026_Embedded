@@ -28,6 +28,7 @@
 #include "HCSR04.h"
 #include "pwm_motors.h"
 #include "../Inc/YS-27.h"
+#include "mapping.h"
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -61,6 +62,11 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+static uint8_t  coord_buf[16];
+static uint8_t  coord_idx  = 0;
+static uint8_t  awaiting_coords = 0;
+uint8_t map_started = 0;
+
 uint8_t rxData;
 volatile uint8_t stopSignal = 1;
 volatile robot_state_t robotState = ROBOT_IDLE;
@@ -84,18 +90,6 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#define HALL_PULSES_PER_REVOLUTION 4U
-#define ROTATE_90_REVOLUTIONS      1U
-#define ROTATE_90_PULSE_TARGET     2U
-#define ROTATE_90_SPEED            485U
-#define ROTATE_90_TIMEOUT_MS       1500U
-#define COMPENSATE 15
-
-#define ROTATE_SPEED        490U  // keep this constant during calibration
-#define ROTATE_LEFT_MS      320U  // tune this
-#define ROTATE_RIGHT_MS     320U  // tune this separately
-#define ROTATE_180_MS       620U // start at 2× your average of left/right, then tune
-
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   HCSR04_ProcessEcho(htim);
@@ -105,99 +99,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   Hall_sensor_counter(GPIO_Pin);
 }
-
-void Rotate_90_degrees(motor_dir_t rotate_dir)
-{
-  uint32_t duration_ms;
-
-  if (rotate_dir == LEFT_DIR)
-    duration_ms = ROTATE_LEFT_MS;
-  else if (rotate_dir == RIGHT_DIR)
-    duration_ms = ROTATE_RIGHT_MS;
-  else
-    return;
-
-  Motor_SetSpeed(BOTH_MOTORS, 0);
-  HAL_Delay(100);
-
-  Motor_ChangeDirection(rotate_dir);
-  Motor_SetSpeed(BOTH_MOTORS, ROTATE_SPEED);
-  HAL_Delay(duration_ms);
-  Motor_SetSpeed(BOTH_MOTORS, 0);
-
-  HAL_Delay(50);
-  Motor_ChangeDirection(FORWARD_DIR);
-}
-
-void Rotate_180_degrees(void)
-{
-  Motor_SetSpeed(BOTH_MOTORS, 0);
-  HAL_Delay(100);
-
-  Motor_ChangeDirection(LEFT_DIR); // pick one direction and keep it consistent
-  Motor_SetSpeed(BOTH_MOTORS, ROTATE_SPEED);
-  HAL_Delay(ROTATE_180_MS);
-  Motor_SetSpeed(BOTH_MOTORS, 0);
-
-  HAL_Delay(50);
-  Motor_ChangeDirection(FORWARD_DIR);
-}
-
-
-// void Rotate_90_degrees(motor_dir_t rotate_dir) {
-//   uint32_t startTick;
-//
-//   if ((rotate_dir != LEFT_DIR) && (rotate_dir != RIGHT_DIR)) {
-//     return;
-//   }
-//
-//   Motor_SetSpeed(BOTH_MOTORS, 0);
-//
-//   HAL_Delay(50); // let motors fully stop before resetting counters
-//
-//   __disable_irq();
-//   pulse_left = 0;
-//   pulse_right = 0;
-//   __enable_irq();
-//
-//   Motor_ChangeDirection(rotate_dir);
-//   Motor_SetSpeed(LEFT_MOTOR, ROTATE_90_SPEED + COMPENSATE);
-//   Motor_SetSpeed(RIGHT_MOTOR, ROTATE_90_SPEED - COMPENSATE);
-//
-//   startTick = HAL_GetTick();
-//   while (1) {
-//     uint32_t leftPulses;
-//     uint32_t rightPulses;
-//
-//     __disable_irq();
-//     leftPulses = pulse_left;
-//     rightPulses = pulse_right;
-//     __enable_irq();
-//
-//     if (leftPulses >= ROTATE_90_PULSE_TARGET) {
-//       Motor_SetSpeed(LEFT_MOTOR, 0);
-//     }
-//
-//     if (rightPulses >= ROTATE_90_PULSE_TARGET) {
-//       Motor_SetSpeed(RIGHT_MOTOR, 0);
-//     }
-//
-//     if ((leftPulses >= ROTATE_90_PULSE_TARGET) &&
-//         (rightPulses >= ROTATE_90_PULSE_TARGET)) {
-//       break;
-//     }
-//
-//     // Timeout: stop everything and bail out
-//     if ((HAL_GetTick() - startTick) > ROTATE_90_TIMEOUT_MS)
-//     {
-//       Motor_SetSpeed(BOTH_MOTORS, 0);
-//       break;
-//     }
-//   }
-//
-//   Motor_SetSpeed(BOTH_MOTORS, 0);
-//   Motor_ChangeDirection(FORWARD_DIR);
-// }
 /* USER CODE END 0 */
 
 /**
@@ -245,6 +146,7 @@ int main(void)
   DWT_Init();
 
   Motor_Init(&htim3);
+  Maze_Init();
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
   Motor_SetSpeed(BOTH_MOTORS, 0);
@@ -255,37 +157,49 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    Ultrasonic_Update();
+    Ultrasonic_Update();      /* always keep sensors cycling — non-blocking */
     MX_USB_HOST_Process();
-    Motor_SetSpeed(BOTH_MOTORS, 0);
 
+    switch (robotState)
+    {
+      case ROBOT_IDLE:
+        Motor_SetSpeed(BOTH_MOTORS, 0);
+        /* LD6 on, others off — already in your UART callback */
+        break;
 
+      case ROBOT_WAITING_MODE:
+        Motor_SetSpeed(BOTH_MOTORS, 0);
+        break;
 
-    // switch (robotState) {
-    //   case ROBOT_IDLE:
-    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
-    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
-    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-    //     break;
-    //
-    //   case ROBOT_WAITING_MODE:
-    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
-    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
-    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-    //     break;
-    //
-    //   case ROBOT_MAP_MODE:
-    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
-    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
-    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-    //     break;
-    //
-    //   case ROBOT_TRAVERSE_MODE:
-    //     HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
-    //     HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
-    //     HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-    //     break;
-    // }
+      case ROBOT_MAP_MODE:
+      {
+        if (!map_started) {
+          /*
+           * Robot starts at cell (0,0) facing North.
+           * Change start_row, start_col, start_heading to match
+           * your physical starting position in the maze.
+           */
+          Mapping_Init(0, 0, HEADING_N);
+          map_started = 1;
+        }
+
+        Mapping_Step();   /* non-blocking; drives motors internally */
+
+        if (Mapping_IsDone()) {
+          robotState  = ROBOT_WAITING_MODE;
+          map_started = 0;
+          /* Optionally print the map immediately */
+          Maze_Print(&huart2);
+        }
+        break;
+      }
+
+      case ROBOT_TRAVERSE_MODE:
+        /* BFS path following goes here — separate task */
+        Motor_SetSpeed(BOTH_MOTORS, 0);
+        break;
+    }
+
 
     /* USER CODE END WHILE */
 
@@ -705,33 +619,104 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  if(huart->Instance==USART2)
+  if (huart->Instance != USART2) return;
+
+  if (awaiting_coords)
   {
-    if(rxData=='Y' || rxData=='y')
+    if (rxData == '\n')
     {
-      stopSignal = 0;
-      robotState = ROBOT_WAITING_MODE;
+      coord_buf[coord_idx] = '\0';
+      uint8_t sr, sc, er, ec;
+      if (sscanf((char*)coord_buf, "%hhu,%hhu,%hhu,%hhu", &sr, &sc, &er, &ec) == 4)
+      {
+        MazePos_t start = {sr, sc};
+        MazePos_t end   = {er, ec};
+        static MazePos_t path[MAZE_ROWS * MAZE_COLS];
+        uint8_t path_len = 0;
+        uint8_t found = Maze_FindPath(start, end, path, &path_len);
+        if (found)
+          Maze_TransmitWithPath(&huart2, path, path_len);
+        else
+          HAL_UART_Transmit(&huart2, (uint8_t*)"NO_PATH\r\n", 9, HAL_MAX_DELAY);
+      }
+      else
+      {
+        HAL_UART_Transmit(&huart2, (uint8_t*)"BAD_FORMAT\r\n", 12, HAL_MAX_DELAY);
+      }
+      awaiting_coords = 0;
+      coord_idx = 0;
+      memset(coord_buf, 0, sizeof(coord_buf));
     }
-    else if (rxData=='N' || rxData=='n')
+    else if (rxData != '\r' && coord_idx < sizeof(coord_buf) - 1)
+    {
+      coord_buf[coord_idx++] = rxData;
+    }
+  }
+
+  else
+  {
+    if (rxData == 'Y' || rxData == 'y')
+    {
+      if (robotState == ROBOT_IDLE) {  // add this guard
+        stopSignal = 0;
+        robotState = ROBOT_WAITING_MODE;
+      }
+    }
+    else if (rxData == 'N' || rxData == 'n')
     {
       stopSignal = 1;
       robotState = ROBOT_IDLE;
-      Motor_SetSpeed(BOTH_MOTORS, 0);
+      map_started = 0;
+      Motor_Stop();
+      Maze_Print(&huart2);
     }
-    else if ((rxData == 'M') || (rxData == 'm'))
+    else if (rxData == 'M' || rxData == 'm')
     {
-      if (robotState == ROBOT_WAITING_MODE) {
+      if (robotState == ROBOT_WAITING_MODE)
         robotState = ROBOT_MAP_MODE;
-      }
     }
-    else if ((rxData == 'T') || (rxData == 't'))
+    else if (rxData == 'T' || rxData == 't')
     {
-      if (robotState == ROBOT_WAITING_MODE) {
+      if (robotState == ROBOT_WAITING_MODE)
+      {
         robotState = ROBOT_TRAVERSE_MODE;
+        awaiting_coords = 1;
+        coord_idx = 0;
+        memset(coord_buf, 0, sizeof(coord_buf));
+        HAL_UART_Transmit(&huart2, (uint8_t*)"COORDS?\r\n", 9, HAL_MAX_DELAY);
       }
     }
-    HAL_UART_Receive_IT(&huart2,&rxData,1); // Enabling interrupt receive again
+
+    switch (robotState)
+    {
+      case ROBOT_IDLE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
+        break;
+      case ROBOT_WAITING_MODE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        break;
+      case ROBOT_MAP_MODE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        break;
+      case ROBOT_TRAVERSE_MODE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        break;
+    }
   }
+
+  HAL_UART_Receive_IT(&huart2, &rxData, 1);
 }
 
 /* USER CODE END 4 */

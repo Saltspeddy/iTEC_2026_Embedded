@@ -118,3 +118,20 @@ void Maze_TransmitWithPath(UART_HandleTypeDef* huart,
     }
     HAL_UART_Transmit(huart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
 }
+
+void Maze_Print(UART_HandleTypeDef* huart)
+{
+    char buf[8];
+    int len;
+
+    for (uint8_t row = 0; row < MAZE_ROWS; row++)
+    {
+        for (uint8_t col = 0; col < MAZE_COLS; col++)
+        {
+            len = snprintf(buf, sizeof(buf), "%3d", maze[row][col]);
+            HAL_UART_Transmit(huart, (uint8_t*)buf, len, HAL_MAX_DELAY);
+        }
+        HAL_UART_Transmit(huart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+    }
+    HAL_UART_Transmit(huart, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+}

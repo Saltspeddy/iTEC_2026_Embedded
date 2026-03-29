@@ -1,6 +1,11 @@
 #include "main.h"
 #include "../Inc/pwm_motors.h"
 
+#define ROTATE_SPEED      490U
+#define ROTATE_LEFT_MS    320U
+#define ROTATE_RIGHT_MS   320U
+#define ROTATE_180_MS     620U
+
 static uint16_t leftMotorSpeed = 0;
 static uint16_t rightMotorSpeed = 0;
 static TIM_HandleTypeDef *motorTim;
@@ -82,4 +87,47 @@ void Motor_ChangeDirection(motor_dir_t dir)
     }
 
     currentMotorDir = dir;
+}
+
+void Rotate_90_degrees(motor_dir_t rotate_dir)
+{
+    uint32_t duration_ms;
+
+    if (rotate_dir == LEFT_DIR)
+    {
+        duration_ms = ROTATE_LEFT_MS;
+    }
+    else if (rotate_dir == RIGHT_DIR)
+    {
+        duration_ms = ROTATE_RIGHT_MS;
+    }
+    else
+    {
+        return;
+    }
+
+    Motor_SetSpeed(BOTH_MOTORS, 0);
+    HAL_Delay(100);
+
+    Motor_ChangeDirection(rotate_dir);
+    Motor_SetSpeed(BOTH_MOTORS, ROTATE_SPEED);
+    HAL_Delay(duration_ms);
+    Motor_SetSpeed(BOTH_MOTORS, 0);
+
+    HAL_Delay(50);
+    Motor_ChangeDirection(FORWARD_DIR);
+}
+
+void Rotate_180_degrees(void)
+{
+    Motor_SetSpeed(BOTH_MOTORS, 0);
+    HAL_Delay(100);
+
+    Motor_ChangeDirection(LEFT_DIR);
+    Motor_SetSpeed(BOTH_MOTORS, ROTATE_SPEED);
+    HAL_Delay(ROTATE_180_MS);
+    Motor_SetSpeed(BOTH_MOTORS, 0);
+
+    HAL_Delay(50);
+    Motor_ChangeDirection(FORWARD_DIR);
 }

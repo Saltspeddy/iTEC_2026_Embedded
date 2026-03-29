@@ -23,5 +23,8 @@ extern motor_dir_t currentMotorDir;
 void Motor_Init(TIM_HandleTypeDef *htim);
 void Motor_SetSpeed(motor_t motor, uint16_t speed);
 void Motor_ChangeDirection(motor_dir_t dir);
+void Rotate_90_degrees(motor_dir_t rotate_dir);
+void Rotate_180_degrees(void);
+void Motor_Stop(void);
 
 #endif

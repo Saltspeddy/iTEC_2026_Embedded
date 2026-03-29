@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +58,7 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
 uint8_t rxData;
 volatile uint8_t stopSignal = 1;
 volatile robot_state_t robotState = ROBOT_IDLE;
@@ -424,33 +426,67 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  if(huart->Instance==USART2)
+  if (huart->Instance != USART2) return;
+
+  if (awaiting_coords)
   {
-    if(rxData=='Y' || rxData=='y')
+    if (rxData == '\n')
+    {
+      coord_buf[coord_idx] = '\0';
+      uint8_t sr, sc, er, ec;
+      if (sscanf((char*)coord_buf, "%hhu,%hhu,%hhu,%hhu", &sr, &sc, &er, &ec) == 4)
+      {
+        MazePos_t start = {sr, sc};
+        MazePos_t end   = {er, ec};
+        static MazePos_t path[MAZE_ROWS * MAZE_COLS];
+        uint8_t path_len = 0;
+        uint8_t found = Maze_FindPath(start, end, path, &path_len);
+        if (found)
+          Maze_TransmitWithPath(&huart2, path, path_len);
+        else
+          HAL_UART_Transmit(&huart2, (uint8_t*)"NO_PATH\r\n", 9, HAL_MAX_DELAY);
+      }
+      else
+      {
+        HAL_UART_Transmit(&huart2, (uint8_t*)"BAD_FORMAT\r\n", 12, HAL_MAX_DELAY);
+      }
+      awaiting_coords = 0;
+      coord_idx = 0;
+      memset(coord_buf, 0, sizeof(coord_buf));
+    }
+    else if (rxData != '\r' && coord_idx < sizeof(coord_buf) - 1)
+    {
+      coord_buf[coord_idx++] = rxData;
+    }
+  }
+  else
+  {
+    if (rxData == 'Y' || rxData == 'y')
     {
       stopSignal = 0;
       robotState = ROBOT_WAITING_MODE;
     }
-    else if (rxData=='N' || rxData=='n')
+    else if (rxData == 'N' || rxData == 'n')
     {
       stopSignal = 1;
       robotState = ROBOT_IDLE;
       Maze_Print();
     }
-    else if ((rxData == 'M') || (rxData == 'm'))
+    else if (rxData == 'M' || rxData == 'm')
     {
-      // debug — transmit current state and received byte
-      char dbg[32];
-      int len = snprintf(dbg, sizeof(dbg), "rx=%c state=%d\r\n", rxData, robotState);
-      HAL_UART_Transmit(&huart2, (uint8_t*)dbg, len, HAL_MAX_DELAY);
-
       if (robotState == ROBOT_WAITING_MODE)
         robotState = ROBOT_MAP_MODE;
     }
-    else if ((rxData == 'T') || (rxData == 't'))
+    else if (rxData == 'T' || rxData == 't')
     {
       if (robotState == ROBOT_WAITING_MODE)
+      {
         robotState = ROBOT_TRAVERSE_MODE;
+        awaiting_coords = 1;
+        coord_idx = 0;
+        memset(coord_buf, 0, sizeof(coord_buf));
+        HAL_UART_Transmit(&huart2, (uint8_t*)"COORDS?\r\n", 9, HAL_MAX_DELAY);
+      }
     }
 
     switch (robotState)
@@ -461,21 +497,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
         break;
-
       case ROBOT_WAITING_MODE:
         HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
         break;
-
       case ROBOT_MAP_MODE:
         HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
         break;
-
       case ROBOT_TRAVERSE_MODE:
         HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
@@ -483,9 +516,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
         break;
     }
-
-    HAL_UART_Receive_IT(&huart2, &rxData, 1);
   }
+
+  HAL_UART_Receive_IT(&huart2, &rxData, 1);
 }
 /* USER CODE END 4 */
 
