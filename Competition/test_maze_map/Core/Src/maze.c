@@ -14,6 +14,8 @@ void Maze_Init(void)
  * Always call this instead of writing maze[][] directly
  * so both sides of every passage stay in sync.
  */
+
+
 void Maze_OpenWall(uint8_t row, uint8_t col, uint8_t wall_bit)
 {
     maze[row][col] |= wall_bit;

@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,12 +61,6 @@ uint8_t rxData;
 volatile uint8_t stopSignal = 1;
 volatile robot_state_t robotState = ROBOT_IDLE;
 
-#define WALL_N  0x01   // bit 0 = north wall open
-#define WALL_E  0x02   // bit 1 = east wall open
-#define WALL_S  0x04   // bit 2 = south wall open
-#define WALL_W  0x08   // bit 3 = west wall open
-
-uint8_t maze[10][10]; // all zeros = all walls closed initially
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -84,6 +78,23 @@ void MX_USB_HOST_Process(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void Maze_Print(void)
+{
+  char buf[8];
+  int len;
+
+  for (uint8_t row = 0; row < MAZE_ROWS; row++)
+  {
+    for (uint8_t col = 0; col < MAZE_COLS; col++)
+    {
+      len = snprintf(buf, sizeof(buf), "%3d", maze[row][col]);
+      HAL_UART_Transmit(&huart2, (uint8_t*)buf, len, HAL_MAX_DELAY);
+    }
+    // newline after each row
+    HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+  }
+  HAL_UART_Transmit(&huart2, (uint8_t*)"\r\n", 2, HAL_MAX_DELAY);
+}
 
 /* USER CODE END 0 */
 
@@ -122,7 +133,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USB_HOST_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_UART_Receive_IT(&huart2, &rxData, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -424,23 +435,56 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     {
       stopSignal = 1;
       robotState = ROBOT_IDLE;
-      //Motor_SetSpeed(BOTH_MOTORS, 0);
-      HAL_UART_Transmit(&huart2, (uint8_t*)maze, MAZE_ROWS * MAZE_COLS, HAL_MAX_DELAY);
-
+      Maze_Print();
     }
     else if ((rxData == 'M') || (rxData == 'm'))
     {
-      if (robotState == ROBOT_WAITING_MODE) {
+      // debug — transmit current state and received byte
+      char dbg[32];
+      int len = snprintf(dbg, sizeof(dbg), "rx=%c state=%d\r\n", rxData, robotState);
+      HAL_UART_Transmit(&huart2, (uint8_t*)dbg, len, HAL_MAX_DELAY);
+
+      if (robotState == ROBOT_WAITING_MODE)
         robotState = ROBOT_MAP_MODE;
-      }
     }
     else if ((rxData == 'T') || (rxData == 't'))
     {
-      if (robotState == ROBOT_WAITING_MODE) {
+      if (robotState == ROBOT_WAITING_MODE)
         robotState = ROBOT_TRAVERSE_MODE;
-      }
     }
-    HAL_UART_Receive_IT(&huart2,&rxData,1); // Enabling interrupt receive again
+
+    switch (robotState)
+    {
+      case ROBOT_IDLE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
+        break;
+
+      case ROBOT_WAITING_MODE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        break;
+
+      case ROBOT_MAP_MODE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        break;
+
+      case ROBOT_TRAVERSE_MODE:
+        HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        break;
+    }
+
+    HAL_UART_Receive_IT(&huart2, &rxData, 1);
   }
 }
 /* USER CODE END 4 */
