@@ -29,5 +29,6 @@ typedef enum {
 void Mapping_Init(uint8_t start_row, uint8_t start_col, heading_t start_heading);
 void Mapping_Step(void);   /* call repeatedly from main loop while in MAP_MODE */
 uint8_t Mapping_IsDone(void);
-
+void Mapping_RotateTo(heading_t target, heading_t *cur_heading_inout);
+void Mapping_MoveOneCell(void);
 #endif /* MAPPING_H */

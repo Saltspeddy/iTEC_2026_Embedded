@@ -331,3 +331,18 @@ void Mapping_Step(void)
             break;
     }
 }
+
+// In mapping.c — rename/expose the existing statics
+void Mapping_RotateTo(heading_t target, heading_t *h)
+{
+    int cw = ((int)target - (int)*h + 4) % 4;
+    if      (cw == 1) Rotate_90_degrees(RIGHT_DIR);
+    else if (cw == 2) Rotate_180_degrees();
+    else if (cw == 3) Rotate_90_degrees(LEFT_DIR);
+    *h = target;
+}
+
+void Mapping_MoveOneCell(void)
+{
+    Move_OneCell();   // calls the existing static
+}

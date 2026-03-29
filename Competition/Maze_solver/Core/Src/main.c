@@ -38,6 +38,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define START_X 15
+#define START_Y 15
+
 typedef enum {
   ROBOT_IDLE = 0,
   ROBOT_WAITING_MODE,
@@ -82,6 +85,12 @@ uint8_t rxData;
 volatile uint8_t stopSignal = 1;
 volatile robot_state_t robotState = ROBOT_IDLE;
 
+// for post-mapping traversal
+static MazePos_t  trav_path[MAZE_ROWS * MAZE_COLS];
+static uint8_t    trav_path_len  = 0;
+static uint8_t    trav_step      = 0;       // next step index to execute
+static uint8_t    trav_ready     = 0;       // path is loaded and ready to run
+static heading_t  trav_heading   = HEADING_N; // robot's current heading during traverse
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -173,7 +182,6 @@ int main(void)
   while (1)
   {
     Ultrasonic_Update();      /* always keep sensors cycling — non-blocking */
-    Speed_Update_Telemetry();
     MX_USB_HOST_Process();
 
     switch (robotState)
@@ -198,15 +206,16 @@ int main(void)
           last_print = HAL_GetTick();
         }
         break;
-        break;
 
       case ROBOT_MAP_MODE:
       {
         if (!map_started) {
-          Mapping_Init(15, 15, HEADING_N);
+          Mapping_Init(START_X, START_Y, HEADING_N);
           map_started = 1;
           HAL_UART_Transmit(&huart2, (uint8_t*)"INIT\r\n", 6, HAL_MAX_DELAY);
         }
+
+          Speed_Update_Telemetry();
 
         if (Mapping_IsDone()) {
           HAL_UART_Transmit(&huart2, (uint8_t*)"DONE\r\n", 6, HAL_MAX_DELAY);
@@ -220,9 +229,39 @@ int main(void)
       }
 
       case ROBOT_TRAVERSE_MODE:
-        /* BFS path following goes here — separate task */
-        Motor_SetSpeed(BOTH_MOTORS, 0);
-        break;
+        {
+          // Path not yet loaded — wait for coords (handled by UART callback)
+          if (!trav_ready) {
+            Motor_SetSpeed(BOTH_MOTORS, 0);
+            break;
+          }
+
+          // All steps done
+          if (trav_step >= trav_path_len - 1) {
+            HAL_UART_Transmit(&huart2, (uint8_t*)"ARRIVED\r\n", 9, HAL_MAX_DELAY);
+            trav_ready   = 0;
+            trav_step    = 0;
+            robotState   = ROBOT_WAITING_MODE;
+            break;
+          }
+
+          // Compute required heading from current cell to next cell
+          MazePos_t cur  = trav_path[trav_step];
+          MazePos_t next = trav_path[trav_step + 1];
+
+          heading_t required;
+          if      (next.row == cur.row - 1) required = HEADING_N;
+          else if (next.row == cur.row + 1) required = HEADING_S;
+          else if (next.col == cur.col + 1) required = HEADING_E;
+          else                              required = HEADING_W;
+
+          // Rotate if needed, then move one cell
+          Mapping_RotateTo(required, &trav_heading);
+          Mapping_MoveOneCell();   // reuse the same function from mapping.c
+
+          trav_step++;
+          break;
+        }
     }
 
 
@@ -685,27 +724,71 @@ void Speed_Update_Telemetry(void)
 }
 //before HAL_UART-RxCpltCallback()
 
+static uint8_t parse_coords(char *buf, uint8_t *sr, uint8_t *sc, uint8_t *er, uint8_t *ec)
+{
+  uint8_t *out[4] = { sr, sc, er, ec };
+  uint8_t  idx    = 0;
+
+  while (*buf && idx < 4)
+  {
+    // skip separators (comma, space, tab)
+    while (*buf == ',' || *buf == ' ' || *buf == '\t') buf++;
+    if (!*buf) break;
+
+    // must start with a digit
+    if (*buf < '0' || *buf > '9') return 0;
+
+    uint16_t val = 0;
+    while (*buf >= '0' && *buf <= '9')
+    {
+      val = val * 10 + (*buf - '0');
+      buf++;
+    }
+    if (val > 255) return 0;
+    *out[idx++] = (uint8_t)val;
+  }
+
+  return (idx == 4) ? 1 : 0;
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance != USART2) return;
 
   if (awaiting_coords)
   {
-    if (rxData == '\n')
+    if (rxData == '\n' || rxData == '\r')
     {
+      if (coord_idx == 0) {
+        // empty line (the \n after a \r), just re-arm and skip
+        HAL_UART_Receive_IT(&huart2, &rxData, 1);
+        return;
+      }
       coord_buf[coord_idx] = '\0';
       uint8_t sr, sc, er, ec;
-      if (sscanf((char*)coord_buf, "%hhu,%hhu,%hhu,%hhu", &sr, &sc, &er, &ec) == 4)
+
+      // Temporary debug — remove once working
+      char dbg[32];
+      int dlen = snprintf(dbg, sizeof(dbg), "GOT:[%s]\r\n", coord_buf);
+      HAL_UART_Transmit(&huart2, (uint8_t*)dbg, dlen, HAL_MAX_DELAY);
+      if (parse_coords((char*)coord_buf, &sr, &sc, &er, &ec))
       {
         MazePos_t start = {sr, sc};
         MazePos_t end   = {er, ec};
         static MazePos_t path[MAZE_ROWS * MAZE_COLS];
         uint8_t path_len = 0;
-        uint8_t found = Maze_FindPath(start, end, path, &path_len);
-        if (found)
-          Maze_TransmitWithPath(&huart2, path, path_len);
-        else
+        uint8_t found = Maze_FindPath(start, end, trav_path, &trav_path_len);
+        HAL_UART_Transmit(&huart2, (uint8_t*)"IN_HERE\r\n", 9, HAL_MAX_DELAY);
+        if (found) {
+          HAL_UART_Transmit(&huart2, (uint8_t*)"PATH_FOUND\r\n", 9, HAL_MAX_DELAY);
+          trav_step   = 0;
+          trav_ready  = 1;
+          // Transmit the path map for visual confirmation
+          Maze_TransmitWithPath(&huart2, trav_path, trav_path_len);
+        } else {
           HAL_UART_Transmit(&huart2, (uint8_t*)"NO_PATH\r\n", 9, HAL_MAX_DELAY);
+          robotState = ROBOT_WAITING_MODE;
+        }
       }
       else
       {
