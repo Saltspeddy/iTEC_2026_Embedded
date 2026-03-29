@@ -47,7 +47,7 @@ static uint8_t        cur_row;
 static uint8_t        cur_col;
 static heading_t      target_heading; /* heading we need to face before moving */
 static uint32_t       phase_start_ms;
-static uint8_t        mapping_done   = 1;
+static uint8_t        mapping_done   = 0;
 
 /* -----------------------------------------------------------------------
  * Helpers

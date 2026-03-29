@@ -147,9 +147,7 @@ int main(void)
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
   /* USER CODE END 2 */
-  // Motor_SetSpeed(BOTH_MOTORS, 0);
-  // Rotate_90_degrees(RIGHT_DIR);
-  // Rotate_180_degrees();
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -453,7 +451,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 83;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 249;
+  htim3.Init.Period = 499;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
