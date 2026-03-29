@@ -57,6 +57,7 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 uint8_t rxData;
 uint8_t stopSignal;
+volatile uint8_t uartTxReady = 1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -89,6 +90,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   Hall_sensor_counter(GPIO_Pin);
 }
 
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART2)
+    uartTxReady = 1;
+}
 /* USER CODE END 0 */
 
 /**
@@ -138,6 +144,8 @@ int main(void)
   Motor_Init(&htim3);
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
+  uint16_t pwmL = PWM_BASE, pwmR = PWM_BASE;
+  static uint32_t lastPrint = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -147,70 +155,57 @@ int main(void)
     Ultrasonic_Update();
     MX_USB_HOST_Process();
 
-    // static uint32_t lastPrint = 0;
-    //
-    // Ultrasonic_Update(); // must keep running every loop iteration!
-    //
-    // if (HAL_GetTick() - lastPrint >= 1000)
-    // {
-    //   lastPrint = HAL_GetTick();
-    //
-    //   char buf[64];
-    //   snprintf(buf, sizeof(buf), "C:%d L:%d R:%d\r\n",
-    //            (int)(HCSR04_GetDistance(CENTER) * 10),
-    //            (int)(HCSR04_GetDistance(LEFT) * 10),
-    //            (int)(HCSR04_GetDistance(RIGHT) * 10));
-    //   HAL_UART_Transmit(&huart2, (uint8_t*)buf, strlen(buf), HAL_MAX_DELAY);
-    // }
     if (!stopSignal)
     {
-      static uint32_t lastPrint = 0;
-      if (HAL_GetTick() - lastPrint >= 200) {
+      if (HAL_GetTick() - lastPrint >= 100 && uartTxReady)
+      {
         lastPrint = HAL_GetTick();
-        char buf[64];
-        snprintf(buf, sizeof(buf), "C:%d L:%d R:%d\r\n",
+        uartTxReady = 0;
+
+        static char buf[80];  // static so it stays valid after the call returns
+        snprintf(buf, sizeof(buf), "C:%d L:%d R:%d pL:%d pR:%d\r\n",
                  (int)(HCSR04_GetDistance(CENTER) * 10),
-                 (int)(HCSR04_GetDistance(LEFT) * 10),
-                 (int)(HCSR04_GetDistance(RIGHT) * 10));
-        HAL_UART_Transmit(&huart2, (uint8_t*)buf, strlen(buf), HAL_MAX_DELAY);
+                 (int)(HCSR04_GetDistance(LEFT)   * 10),
+                 (int)(HCSR04_GetDistance(RIGHT)  * 10),
+                 pwmL, pwmR);
+        HAL_UART_Transmit_IT(&huart2, (uint8_t*)buf, strlen(buf));
       }
       HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
 
-      // float distCenter = HCSR04_GetDistance(CENTER);
-      // float distLeft = HCSR04_GetDistance(LEFT);
-      // float distRight = HCSR04_GetDistance(RIGHT);
-      //
-      // if (distCenter > OBSTACLE_CM)
-      // {
-      //   /* ── Path clear: drive straight with wall correction ── */
-      //   HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
-      //
-      //   if (currentMotorDir != FORWARD_DIR)
-      //   {
-      //     Motor_ChangeDirection(FORWARD_DIR);
-      //     currentMotorDir = FORWARD_DIR;
-      //   }
-      //
-      //   uint16_t pwmL, pwmR;
-      //   WallCorrection_Compute(distLeft, distRight, &pwmL, &pwmR);
-      //
-      //   Motor_SetSpeed(LEFT_MOTOR,  pwmL);
-      //   Motor_SetSpeed(RIGHT_MOTOR, pwmR);
-      // }
-      // else
-      // {
-      //   /* ── Obstacle ahead: turn left (or swap to RIGHT_DIR) ── */
-      //   HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
-      //
-      //   if (currentMotorDir != LEFT_DIR)
-      //   {
-      //     Motor_ChangeDirection(LEFT_DIR);
-      //     currentMotorDir = LEFT_DIR;
-      //   }
-      //
-      //   Motor_SetSpeed(LEFT_MOTOR,  PWM_BASE);
-      //   Motor_SetSpeed(RIGHT_MOTOR, PWM_BASE);
-      // }
+    float distCenter = HCSR04_GetDistance(CENTER);
+    float distLeft = HCSR04_GetDistance(LEFT);
+    float distRight = HCSR04_GetDistance(RIGHT);
+
+    if (distCenter > OBSTACLE_CM)
+    {
+      /* ── Path clear: drive straight with wall correction ── */
+      HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
+
+      if (currentMotorDir != FORWARD_DIR)
+      {
+        Motor_ChangeDirection(FORWARD_DIR);
+        currentMotorDir = FORWARD_DIR;
+      }
+
+      WallCorrection_Compute(distLeft, distRight, &pwmL, &pwmR);
+
+      Motor_SetSpeed(LEFT_MOTOR,  pwmL);
+      Motor_SetSpeed(RIGHT_MOTOR, pwmR);
+    }
+    else
+    {
+      /* ── Obstacle ahead: turn left (or swap to RIGHT_DIR) ── */
+      HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
+
+      if (currentMotorDir != LEFT_DIR)
+      {
+        Motor_ChangeDirection(LEFT_DIR);
+        currentMotorDir = LEFT_DIR;
+      }
+
+      Motor_SetSpeed(LEFT_MOTOR,  PWM_BASE);
+      Motor_SetSpeed(RIGHT_MOTOR, PWM_BASE);
+    }
     }
     else
     {
