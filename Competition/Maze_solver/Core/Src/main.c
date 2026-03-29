@@ -190,7 +190,7 @@ int main(void)
         if ((HAL_GetTick() - last_print) >= 500U)
         {
           char dbg[64];
-          int dlen = snprintf(dbg, sizeof(dbg), "C:%d L:%d R:%d\r\n",
+          int dlen = snprintf(dbg, sizeof(dbg), "Distances: C:%d L:%d R:%d\r\n",
               (int)HCSR04_GetDistance(CENTER),
               (int)HCSR04_GetDistance(LEFT),
               (int)HCSR04_GetDistance(RIGHT));
@@ -676,11 +676,12 @@ void Speed_Update_Telemetry(void)
   float speed_right = ((float)pulses_right / WHEEL_MAGNETS) * WHEEL_CIRC_CM / dt_s;
   float speed_avg   = (speed_left + speed_right) / 2.0f;
 
-  char buf[64];
+  char buf[80];
   int len = snprintf(buf, sizeof(buf),
-      "SPD L:%d R:%d A:%d cm/s\r\n",
+      "SPEED: L:%d R:%d A:%d cm\r\n",
       (int)speed_left, (int)speed_right, (int)speed_avg);
-  HAL_UART_Transmit(&huart2, (uint8_t*)buf, len, 10);
+  if (len > 0 && len < (int)sizeof(buf))
+    HAL_UART_Transmit(&huart2, (uint8_t*)buf, len, HAL_MAX_DELAY);
 }
 //before HAL_UART-RxCpltCallback()
 
