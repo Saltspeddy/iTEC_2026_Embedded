@@ -146,9 +146,10 @@ int main(void)
   Maze_Init();
   HAL_UART_Receive_IT(&huart2, &rxData, 1);
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
-  Motor_SetSpeed(BOTH_MOTORS, 0);
   /* USER CODE END 2 */
-
+  // Motor_SetSpeed(BOTH_MOTORS, 0);
+  // Rotate_90_degrees(RIGHT_DIR);
+  // Rotate_180_degrees();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)

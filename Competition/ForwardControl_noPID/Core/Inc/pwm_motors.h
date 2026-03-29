@@ -18,9 +18,9 @@
  *    error < 0  → robot too close to RIGHT wall
  *                 → slow right motor, speed up left motor
  */
-#define PWM_MIN         460   /* stall threshold — never go below */
-#define PWM_MAX   500   /* timer period                    */
-#define PWM_BASE        (PWM_MIN + (PWM_MAX - PWM_MIN) / 2)   /* cruise speed (within 480-500) */
+#define PWM_MIN 460   /* stall threshold — never go below */
+#define PWM_MAX 490   /* timer period                    */
+#define PWM_BASE (PWM_MIN + (PWM_MAX - PWM_MIN) / 2)   /* cruise speed (within 480-500) */
 
 /*
  * How aggressively to correct.
@@ -46,7 +46,7 @@
 /*
  * Obstacle distance: stop / turn below this.
  */
-#define OBSTACLE_CM     5.0f
+#define OBSTACLE_CM     10.0f
 
 // #define PWM_MAX 499
 

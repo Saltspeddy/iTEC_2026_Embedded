@@ -111,6 +111,8 @@ void WallCorrection_Compute(float distLeft,
     /* Only correct when both walls are visible */
     if (distLeft < WALL_DETECT_CM && distRight < WALL_DETECT_CM)
     {
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
         /*
          * Positive error  → left wall is closer
          *                  → we've drifted left
@@ -141,11 +143,13 @@ void WallCorrection_Compute(float distLeft,
          * Only left wall visible — hug it gently.
          * A fixed small correction nudges us away.
          */
-        correction = 3;
+        HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
+        correction = 8;
     }
     else if (distRight < WALL_DETECT_CM)
     {
-        correction = -3;
+        HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
+        correction = -8;
     }
 
     /*
@@ -171,8 +175,10 @@ void WallCorrection_Compute(float distLeft,
     //     *pwmRight = PWM_BASE;
     // }
 
-     *pwmLeft  = (uint16_t)clamp_int(PWM_BASE + correction, PWM_MIN, PWM_MAX);
-     *pwmRight = (uint16_t)clamp_int(PWM_BASE - correction, PWM_MIN, PWM_MAX);
+     // *pwmLeft  = (uint16_t)clamp_int(PWM_BASE + correction, PWM_MIN, PWM_MAX);
+     // *pwmRight = (uint16_t)clamp_int(PWM_BASE - correction, PWM_MIN, PWM_MAX);
+     *pwmLeft  = PWM_BASE;
+     *pwmRight = PWM_BASE;
 }
 
 int clamp_int(int v, int lo, int hi)
