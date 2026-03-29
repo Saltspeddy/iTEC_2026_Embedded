@@ -39,45 +39,57 @@ void Motor_SetSpeed(motor_t motor, uint16_t speed)
     }
 }
 
+/* -----------------------------------------------------------------------
+ * Motor_Stop  —  zero both PWM outputs immediately
+ * --------------------------------------------------------------------- */
+void Motor_Stop(void)
+{
+    leftMotorSpeed  = 0;
+    rightMotorSpeed = 0;
+    if (motorTim != NULL)
+    {
+        motorTim->Instance->CCR3 = 0;
+        motorTim->Instance->CCR4 = 0;
+    }
+}
+
 void Motor_ChangeDirection(motor_dir_t dir)
 {
-    uint16_t maxSpeed = (leftMotorSpeed > rightMotorSpeed) ? leftMotorSpeed : rightMotorSpeed;
-    for (int i = maxSpeed; i > 0; i--)
-    {
-        if (i <= leftMotorSpeed)  motorTim->Instance->CCR3 = i;
-        if (i <= rightMotorSpeed) motorTim->Instance->CCR4 = i;
-        HAL_Delay(10);
-    }
-    leftMotorSpeed = 0;
-    rightMotorSpeed = 0;
-    HAL_Delay(50);
+    /* Step 1: stop PWM immediately */
+    Motor_Stop();
 
+    /* Step 2: set H-bridge direction pins */
     switch (dir)
     {
         case FORWARD_DIR:
-            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, 1);
-            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, 0);
-
-            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, 0);
-            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, 1);
+            /* Left motor forward, right motor forward */
+            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, GPIO_PIN_SET);
             break;
 
         case RIGHT_DIR:
-            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, 1);
-            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, 0);
-
-            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, 1);
-            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, 0);
+            /* Left motor forward, right motor reverse → pivot right */
+            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, GPIO_PIN_RESET);
             break;
 
         case LEFT_DIR:
-            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, 0);
-            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, 1);
+            /* Left motor reverse, right motor forward → pivot left */
+            HAL_GPIO_WritePin(IN1_GPIO_Port, IN1_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(IN2_GPIO_Port, IN2_Pin, GPIO_PIN_SET);
+            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, GPIO_PIN_SET);
+            break;
 
-            HAL_GPIO_WritePin(IN3_GPIO_Port, IN3_Pin, 0);
-            HAL_GPIO_WritePin(IN4_GPIO_Port, IN4_Pin, 1);
+        default:
             break;
     }
+
+    currentMotorDir = dir;
 }
 
 /**
@@ -105,9 +117,23 @@ void WallCorrection_Compute(float distLeft,
          *                  → need to steer right
          *                     (slow left, speed right)
          */
+
+        // float error = distLeft - distRight;
+        // correction  = (int)(error / WALL_GAIN);
+        // correction  = clamp_int(correction, -MAX_CORRECTION, MAX_CORRECTION);
         float error = distLeft - distRight;
-        correction  = (int)(error / WALL_GAIN);
-        correction  = clamp_int(correction, -MAX_CORRECTION, MAX_CORRECTION);
+        float absErr = error < 0 ? -error : error;
+
+        if (absErr > 0.01f)   // avoid division by zero
+        {
+            // quadratic scaling: small differences get small correction, large differences get bigger corrections
+            correction = (int)((error / absErr) * (absErr * absErr) / WALL_GAIN);
+        }
+        else
+        {
+            correction = 0;
+        }
+        correction = clamp_int(correction, -MAX_CORRECTION, MAX_CORRECTION);
     }
     else if (distLeft < WALL_DETECT_CM)
     {
@@ -129,8 +155,24 @@ void WallCorrection_Compute(float distLeft,
      * Example: drifted left (correction > 0)
      *   left slows  → turns robot back right
      */
-    *pwmLeft  = (uint16_t)clamp_int(PWM_BASE - correction, PWM_MIN, PWM_MAX_SPEED);
-    *pwmRight = (uint16_t)clamp_int(PWM_BASE + correction, PWM_MIN, PWM_MAX_SPEED);
+    // if (correction > 0)       // too close to left → slow left only
+    // {
+    //     *pwmLeft  = (uint16_t)clamp_int(PWM_BASE - (correction * 2), PWM_MIN, PWM_MAX);
+    //     *pwmRight = PWM_BASE;
+    // }
+    // else if (correction < 0)  // too close to right → slow right only
+    // {
+    //     *pwmLeft  = PWM_BASE;
+    //     *pwmRight = (uint16_t)clamp_int(PWM_BASE + (correction * 2), PWM_MIN, PWM_MAX);
+    // }
+    // else
+    // {
+    //     *pwmLeft  = PWM_BASE;
+    //     *pwmRight = PWM_BASE;
+    // }
+
+     *pwmLeft  = (uint16_t)clamp_int(PWM_BASE + correction, PWM_MIN, PWM_MAX);
+     *pwmRight = (uint16_t)clamp_int(PWM_BASE - correction, PWM_MIN, PWM_MAX);
 }
 
 int clamp_int(int v, int lo, int hi)

@@ -19,8 +19,8 @@
  *                 → slow right motor, speed up left motor
  */
 #define PWM_MIN         460   /* stall threshold — never go below */
-#define PWM_MAX_SPEED   500   /* timer period                    */
-#define PWM_BASE        (PWM_MAX_SPEED + (PWM_MAX_SPEED - PWM_MIN) / 2)   /* cruise speed (within 480-500) */
+#define PWM_MAX   500   /* timer period                    */
+#define PWM_BASE        (PWM_MIN + (PWM_MAX - PWM_MIN) / 2)   /* cruise speed (within 480-500) */
 
 /*
  * How aggressively to correct.
@@ -29,13 +29,13 @@
  * you get a ±2 PWM nudge — safe for the narrow 480-500 range.
  * Tune this first; raise it if the robot still drifts.
  */
-#define WALL_GAIN       5.0f
+#define WALL_GAIN       1.0f
 
 /*
  * Maximum PWM correction applied to either motor.
  * Keeps us from saturating out of the usable band.
  */
-#define MAX_CORRECTION  ((PWM_MAX_SPEED - PWM_MIN)  / 2)
+#define MAX_CORRECTION  ((PWM_MAX - PWM_MIN)  / 2)
 
 /*
  * Distance from a side wall considered "no wall present".
@@ -48,7 +48,7 @@
  */
 #define OBSTACLE_CM     5.0f
 
-#define PWM_MAX 499
+// #define PWM_MAX 499
 
 typedef enum {
     LEFT_MOTOR = 3,
@@ -78,5 +78,11 @@ void Motor_ChangeDirection(motor_dir_t dir);
  */
 void WallCorrection_Compute(float distLeft, float distRight, uint16_t *pwmLeft, uint16_t *pwmRight);
 int clamp_int(int v, int lo, int hi);
+
+/**
+ * @brief  Hard-stop both motors (speed = 0, does not change direction).
+ *         Call this when stopSignal is asserted.
+ */
+void Motor_Stop(void);
 
 #endif
