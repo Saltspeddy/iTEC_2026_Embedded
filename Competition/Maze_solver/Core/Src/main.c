@@ -25,10 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
-#include "HCSR04.h"
-#include "pwm_motors.h"
-#include "../Inc/YS-27.h"
-#include "mapping.h"
+
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -151,8 +148,7 @@ int main(void)
   Motor_ChangeDirection(currentMotorDir); // in the beginning, forward
   Motor_SetSpeed(BOTH_MOTORS, 0);
   /* USER CODE END 2 */
-  // Rotate_90_degrees(RIGHT_DIR);
-  Rotate_180_degrees();
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -169,27 +165,36 @@ int main(void)
 
       case ROBOT_WAITING_MODE:
         Motor_SetSpeed(BOTH_MOTORS, 0);
+
+        static uint32_t last_print = 0;
+        if ((HAL_GetTick() - last_print) >= 500U)
+        {
+          char dbg[64];
+          int dlen = snprintf(dbg, sizeof(dbg), "C:%d L:%d R:%d\r\n",
+              (int)HCSR04_GetDistance(CENTER),
+              (int)HCSR04_GetDistance(LEFT),
+              (int)HCSR04_GetDistance(RIGHT));
+          HAL_UART_Transmit(&huart2, (uint8_t*)dbg, dlen, HAL_MAX_DELAY);
+          last_print = HAL_GetTick();
+        }
+        break;
         break;
 
       case ROBOT_MAP_MODE:
       {
         if (!map_started) {
-          /*
-           * Robot starts at cell (0,0) facing North.
-           * Change start_row, start_col, start_heading to match
-           * your physical starting position in the maze.
-           */
-          Mapping_Init(0, 0, HEADING_N);
+          Mapping_Init(15, 15, HEADING_N);
           map_started = 1;
+          HAL_UART_Transmit(&huart2, (uint8_t*)"INIT\r\n", 6, HAL_MAX_DELAY);
         }
 
-        Mapping_Step();   /* non-blocking; drives motors internally */
-
         if (Mapping_IsDone()) {
+          HAL_UART_Transmit(&huart2, (uint8_t*)"DONE\r\n", 6, HAL_MAX_DELAY);
           robotState  = ROBOT_WAITING_MODE;
           map_started = 0;
-          /* Optionally print the map immediately */
           Maze_Print(&huart2);
+        } else {
+          Mapping_Step();
         }
         break;
       }
@@ -202,6 +207,7 @@ int main(void)
 
 
     /* USER CODE END WHILE */
+    MX_USB_HOST_Process();
 
     /* USER CODE BEGIN 3 */
   }
@@ -446,7 +452,7 @@ static void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 83;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 499;
+  htim3.Init.Period = 249;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)

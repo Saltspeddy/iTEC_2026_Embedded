@@ -7,6 +7,10 @@ static uint8_t sensorState = 0;
 
 #define SENSOR_DELAY_MS 10
 
+// private to this source file / library, only accessible through the getter/setter
+// HCSR04_GetDistance, HCSR04_Reset
+static HCSR04_t sensors[3];
+
 // reality - CANNOT trigger all 3 sensors simultaneously: otherwise, we get interference
 // need 50 ms (at least 30 ms) between each sensor
 void Ultrasonic_Update(void)
@@ -14,7 +18,7 @@ void Ultrasonic_Update(void)
   switch(sensorState)
   {
     case 0: // Trigger
-      HCSR04_Reset(currentSensor);
+      // HCSR04_Reset(currentSensor);
       HCSR04_Trigger(currentSensor);
 
       lastTriggerTime = HAL_GetTick();
@@ -24,6 +28,7 @@ void Ultrasonic_Update(void)
     case 1: // Wait
       if (HAL_GetTick() - lastTriggerTime >= SENSOR_DELAY_MS)
       {
+        sensors[currentSensor].Is_First_Captured = 0;
         currentSensor = (currentSensor + 1) % 3;
         sensorState = 0;
       }
@@ -34,10 +39,6 @@ void Ultrasonic_Update(void)
       break;
   }
 }
-
-// private to this source file / library, only accessible through the getter/setter
-// HCSR04_GetDistance, HCSR04_Reset
-static HCSR04_t sensors[3];
 
 HCSR04_t* getSensorByChannel(uint32_t channel)
 {

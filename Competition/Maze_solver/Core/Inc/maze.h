@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
 
-#define MAZE_ROWS 10
-#define MAZE_COLS 10
+#define MAZE_ROWS 30
+#define MAZE_COLS 30
 
 #define WALL_N 0x01
 #define WALL_E 0x02

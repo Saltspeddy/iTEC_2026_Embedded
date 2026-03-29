@@ -10,10 +10,9 @@
  * Physical constants — tune these to your robot
  * ----------------------------------------------------------------------- */
 #define MOVE_SPEED              490U
-#define MOVE_TIME_MS            1150U
+#define MOVE_TIME_MS            900
 #define ROTATE_90_TIME_MS       600U
 #define ROTATE_SPEED            220U    /* rotation uses lower speed for accuracy */
-#define SENSOR_SETTLE_MS        60U
 #define WALL_OPEN_THRESHOLD_CM  13.0f
 
 /* -----------------------------------------------------------------------
@@ -117,7 +116,7 @@ static void do_rotate_to(heading_t target)
  */
 /* In mapping.c — replace the old defines and function */
 
-#define MOVE_TIME_MS     1150U    /* TUNE THIS: 280mm / your_speed_mm_per_s * 1000  */
+
 /* Example: if robot does 243mm/s → 280/243*1000 ≈ 1152ms */
 
 static void Move_OneCell(void)
@@ -135,7 +134,7 @@ static void Move_OneCell(void)
 
     /* settle delay — non-blocking */
     uint32_t settle = HAL_GetTick();
-    while ((HAL_GetTick() - settle) < 80U)
+    while ((HAL_GetTick() - settle) < 800U)
     {
         Ultrasonic_Update();
     }
@@ -209,11 +208,17 @@ void Mapping_Step(void)
                 heading_t abs_h  = sensor_to_abs(sensors[i]);
                 uint8_t   nr, nc;
 
-                if (dist >= WALL_OPEN_THRESHOLD_CM &&
+                /* 999 = no reading yet, skip. Only trust readings below max range */
+                if (dist >= WALL_OPEN_THRESHOLD_CM && dist < 200.0f &&
                     neighbour(cur_row, cur_col, abs_h, &nr, &nc))
                 {
                     Maze_OpenWall(cur_row, cur_col, heading_to_wall(abs_h));
                 }
+                // if (dist >= WALL_OPEN_THRESHOLD_CM &&
+                //     neighbour(cur_row, cur_col, abs_h, &nr, &nc))
+                // {
+                //     Maze_OpenWall(cur_row, cur_col, heading_to_wall(abs_h));
+                // }
             }
 
             /*

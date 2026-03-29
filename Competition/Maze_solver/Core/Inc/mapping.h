@@ -16,7 +16,7 @@
  * After stopping, wait this long before trusting sensor readings.
  * Must be > 30 ms (one full 3-sensor ultrasonic cycle).
  */
-#define SENSOR_SETTLE_MS         60U
+#define SENSOR_SETTLE_MS         500U
 
 /* Robot heading — which absolute direction the front sensor faces */
 typedef enum {
